@@ -34,7 +34,7 @@ function GenerateDiff(expected, unexpected)
   var k = 0;
   for (var i=0; i < expected.length; i++) {
     for (var j=k; j < unexpected.length; j++) {
-      if (unexpected[j].Equals(expected[i])) {
+      if (Result.Equals(expected[i], unexpected[j])) {
         var tmp = unexpected[k];
         unexpected[k] = unexpected[j];
         unexpected[j] = tmp;
@@ -43,13 +43,13 @@ function GenerateDiff(expected, unexpected)
       }
     }
     if (j == unexpected.length) {
-      sb.append(LatexOutputParser.GenerateResultRow(expected[i]));
+      sb.append(LogParser.GenerateResultRow(expected[i]));
     }
   }
   if (k < unexpected.length) {
     sb.append("<tr><td></td><td colspan='3'>Unexpected:</td></tr>");
     for (; k<unexpected.length; k++) {
-      sb.append(LatexOutputParser.GenerateResultRow(unexpected[k]));
+      sb.append(LogParser.GenerateResultRow(unexpected[k]));
     }
   }
   sb.append("</table>");
@@ -62,7 +62,7 @@ if (file.status == 0) {
   file = null;  // free mem
 
   var marker = "-----BEGIN OUTPUT BLOCK-----\n";
-  var parser = new LatexOutputParser();
+  var parser = new LogParser();
 
   var failedTests = 0;
   var sb = new StringBuilder();
@@ -88,7 +88,7 @@ if (file.status == 0) {
 
     var passed = expected.length == generated.length;
     for (var j=0; j<expected.length && passed; j++) {
-      passed = generated[j].Equals(expected[j]);
+      passed = Result.Equals(expected[j], generated[j]);
     }
     sb.append("<tr>");
     sb.append("<td style='background-color: " + (passed ? "green" : "red") + "'></td>");

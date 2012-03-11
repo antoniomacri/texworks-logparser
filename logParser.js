@@ -2,7 +2,7 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Antonio Macrì
-// Version: 0.7.1
+// Version: 0.7.2
 // Date: 2012-03-11
 // Script-Type: hook
 // Hook: AfterTypeset
@@ -33,7 +33,7 @@ if(typeof(String.prototype.trimLeft) == "undefined")
   String.prototype.trimLeft = function() { return this.replace(/^[\s\n]+/, ""); };
 }
 
-// For performance issue, we define and use a StringBuilder
+// For performance issues, we define and use a StringBuilder
 function StringBuilder()
 {
   this.buffer = [];
@@ -63,14 +63,14 @@ function Result(s, f, r, d)
   this.Description = d;
 }
 
-Result.prototype.Equals = function(that)
+Result.Equals = function(a, b)
 {
-  return this.Severity == that.Severity && this.File == that.File &&
-         this.Row == that.Row && this.Description == that.Description;
+  return a.Severity == b.Severity && a.File == b.File &&
+         a.Row == b.Row && a.Description == b.Description;
 }
 
 // Constructor
-function LatexOutputParser()
+function LogParser()
 {
   this.Patterns = [
     {
@@ -109,7 +109,8 @@ function LatexOutputParser()
       }
     },
     {
-      // This pattern recognizes badboxes. Each message can span over multiple lines but is terminated by "|".
+      // This pattern recognizes badboxes. Each message can span over multiple lines.
+      // TODO: how to determine when it ends?
       Regex: new RegExp("^((?:Under|Over)full \\\\[hv]box\\s*\\([^)]+\\) in paragraph at lines (\\d+)--\\d+)\n.+"),
       Callback: function(m, f) {
         return new Result(Severity.BadBox, f, m[2], m[0].trim());
@@ -124,19 +125,7 @@ function LatexOutputParser()
 }
 
 
-function ExpandCodePointsLength(s)
-{
-  // Non-ASCII chars occupy more than one byte
-  var len = s.length;
-  for (var k = 0; k < s.length; k++) {
-    if (s.charCodeAt(k) > 0x7F) len++;
-    if (s.charCodeAt(k) > 0x7FF) len++;
-    if (s.charCodeAt(k) > 0xFFFF) len++;
-  }
-  return len;
-}
-
-LatexOutputParser.prototype.ParseOutput = function(output)
+LogParser.prototype.ParseOutput = function(output)
 {
   // Generate or clear old results
   this.Results = [];
@@ -176,7 +165,6 @@ LatexOutputParser.prototype.ParseOutput = function(output)
         --extraParens;
       }
       else if (fileStack.length > 0) {
-        files += padString(indent--*2) + "</" + currentFile + ">\n";
         currentFile = fileStack.pop();
       }
       output = output.slice(1);
@@ -188,9 +176,9 @@ LatexOutputParser.prototype.ParseOutput = function(output)
           var chunk = match[0];
           while (true) {
             output = output.slice(chunk.length);
-            var len = ExpandCodePointsLength(chunk);
-          // TODO: we should count preceding characters in the same line,
-          // not simply consider 79: filenames may start in the middle of a line.
+            var len = LogParser.ExpandCodePointsLength(chunk);
+            // TODO: we should count preceding characters in the same line,
+            // not simply consider 79: filenames may start in the middle of a line.
             // A (real) test case is needed!
             if (output[0] != '\n' || len != 79) {
               break;
@@ -202,7 +190,7 @@ LatexOutputParser.prototype.ParseOutput = function(output)
             if (!m) {
               break;
             }
-              match[2] += m[0];
+            match[2] += m[0];
             chunk = m[0];
           }
         }
@@ -214,7 +202,6 @@ LatexOutputParser.prototype.ParseOutput = function(output)
         fileStack.push(currentFile);
         // Filename may contain line breaks inserted by the compiler
         currentFile = (match[1] || match[2]).replace(/\n/g, '');
-        files += padString(++indent*2) + "<" + currentFile + ">\n";
         extraParens = 0;
       }
       else {
@@ -226,7 +213,7 @@ LatexOutputParser.prototype.ParseOutput = function(output)
 }
 
 
-LatexOutputParser.prototype.GenerateReport = function(onlyTable)
+LogParser.prototype.GenerateReport = function(onlyTable)
 {
   if (this.Results.length > 0) {
     var counters = [ 0, 0, 0 ];
@@ -240,13 +227,13 @@ LatexOutputParser.prototype.GenerateReport = function(onlyTable)
       }
       for(var i = reordered.length-1; i >= 0; i--) {
         for(var j = 0; j < reordered[i].length; j++)
-          sb.append(LatexOutputParser.GenerateResultRow(reordered[i][j]));
+          sb.append(LogParser.GenerateResultRow(reordered[i][j]));
       }
     }
     else {
       for(var i = 0; i < this.Results.length; i++)  {
         var result = this.Results[i];
-        sb.append(LatexOutputParser.GenerateResultRow(result));
+        sb.append(LogParser.GenerateResultRow(result));
         counters[result.Severity]++;
       }
     }
@@ -272,9 +259,22 @@ LatexOutputParser.prototype.GenerateReport = function(onlyTable)
 }
 
 
-function htmlize(str) {
+LogParser.ExpandCodePointsLength = function(s)
+{
+  // Non-ASCII chars occupy more than one byte
+  var len = s.length;
+  for (var k = 0; k < s.length; k++) {
+    if (s.charCodeAt(k) > 0x7F) len++;
+    if (s.charCodeAt(k) > 0x7FF) len++;
+    if (s.charCodeAt(k) > 0xFFFF) len++;
+  }
+  return len;
+}
+
+
+LogParser.EscapeHtml = function(str) {
   var html = str;
-  html = html.replace(/&(?!amp;|lt;|gt;|nbsp;)/g, "&amp;");
+  html = html.replace(/&/g, "&amp;");
   html = html.replace(/</g, "&lt;");
   html = html.replace(/>/g, "&gt;");
   html = html.replace(/\n /g, "\n&nbsp;");
@@ -284,16 +284,15 @@ function htmlize(str) {
 }
 
 
-LatexOutputParser.GenerateResultRow = function(result) {
-  var colorsForSeverity = [ "#8080ff", "yellow", "red" ];
-
+LogParser.GenerateResultRow = function(result) {
   var html = '';
+  var color = [ "#8080FF", "#F8F800", "#F80000" ][result.Severity];
   var url = 'texworks:' + result.File + (result.Row != '?' && result.Row != 0 ? '#' + result.Row : '');
   html += '<tr>';
-  html += '<td style="background-color: ' + colorsForSeverity[result.Severity] + '"></td>';
-  html += '<td valign="top"><a href="' + url + '">' + /([^\\]+)$/.exec(result.File)[1] + '</a></td>';
+  html += '<td style="background-color: ' + color + '"></td>';
+  html += '<td valign="top"><a href="' + url + '">' + result.File.match("([^\\\\/]+)$")[1] + '</a></td>';
   html += '<td valign="top">' + result.Row + '</td>';
-  html += '<td valign="top" style="font-family: monospace;">' + htmlize(result.Description) + '</td>';
+  html += '<td valign="top">' + LogParser.EscapeHtml(result.Description) + '</td>';
   html += '</tr>';
   return html;
 }
@@ -301,20 +300,8 @@ LatexOutputParser.GenerateResultRow = function(result) {
 
 // We allow other scripts to use and reconfigure this parser
 if (typeof(justLoad) == "undefined")  {
-  var parser = new LatexOutputParser();
-
-  var files = "";
-  var indent = 0;
-
-  function padString(length) {
-    var str = "";
-    while (str.length < length)
-      str += " ";
-    return str;
-  }
-
+  var parser = new LogParser();
   parser.ParseOutput(TW.target.consoleOutput);
-  TW.app.clipboard = files;
   TW.result = parser.GenerateReport();
 }
 undefined;
