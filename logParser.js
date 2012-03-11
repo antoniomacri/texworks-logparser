@@ -2,8 +2,8 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Antonio Macrì
-// Version: 0.7
-// Date: 2012-03-08
+// Version: 0.7.1
+// Date: 2012-03-11
 // Script-Type: hook
 // Hook: AfterTypeset
 
@@ -124,6 +124,18 @@ function LatexOutputParser()
 }
 
 
+function ExpandCodePointsLength(s)
+{
+  // Non-ASCII chars occupy more than one byte
+  var len = s.length;
+  for (var k = 0; k < s.length; k++) {
+    if (s.charCodeAt(k) > 0x7F) len++;
+    if (s.charCodeAt(k) > 0x7FF) len++;
+    if (s.charCodeAt(k) > 0xFFFF) len++;
+  }
+  return len;
+}
+
 LatexOutputParser.prototype.ParseOutput = function(output)
 {
   // Generate or clear old results
@@ -173,30 +185,30 @@ LatexOutputParser.prototype.ParseOutput = function(output)
       match = new RegExp("^\\(\"((?:\\./|/|.\\\\|[a-zA-Z]:\\\\)(?:[^\"]|\n)+)\"|^\\(((?:\\./|/|.\\\\|[a-zA-Z]:\\\\)(?:(?!\\))[\\S])+)").exec(output);
       if (match) {
         if (typeof(match[2]) != "undefined") {
-          // If match[2] is undefined, it was captured a file with spaces,
-          // always enclosed in quotes: we don't have to worry.
-          var len = match[0].length;
-          for (var k=0; k < match[0].length; k++) {
-            if (match[0].charCodeAt(k) >= 128) len++;
-          }
-          output = output.slice(match[0].length);
+          var chunk = match[0];
+          while (true) {
+            output = output.slice(chunk.length);
+            var len = ExpandCodePointsLength(chunk);
           // TODO: we should count preceding characters in the same line,
           // not simply consider 79: filenames may start in the middle of a line.
-          // Also, non-ASCII chars may occupy more than two bytes: how to distinguish?
-          if (output[0] == '\n' && 79 == len) {
-            output = output.slice(1); // Removes the '\n'
-            // This fails if filename terminates exactly at the end of the line.
-            // We retrieve a portion of the next lines (until a space is found).
-            var m = /^(?:(?!\))[\S])+/.exec(output);
-            if (m) {
-              match[2] += m[0];
-              output = output.slice(m[0].length);
+            // A (real) test case is needed!
+            if (output[0] != '\n' || len != 79) {
+              break;
             }
-            // Do we have to check for another line?
-            // TODO: Files spanning over two or more lines aren't handled correctly.
+            output = output.slice(1); // Removes the '\n'
+            // BUG: This fails if filename terminates exactly at the end of the line.
+            // We retrieve characters in the next lines until a space is found.
+            var m = /^(?:(?!\))[\S])+/.exec(output);
+            if (!m) {
+              break;
+            }
+              match[2] += m[0];
+            chunk = m[0];
           }
         }
         else {
+          // If match[2] is undefined, it was captured a file with spaces,
+          // always enclosed in quotes: we don't have to worry.
           output = output.slice(match[0].length);
         }
         fileStack.push(currentFile);

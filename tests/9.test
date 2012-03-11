@@ -1,7 +1,7 @@
 [
   {
     "Severity":2,
-    "File":"C:\\Users\\Antonio\\AppData\\Local\\Temp\\in-a-very-long-path-that-forces-a-third-line\a-very-very-long-file-name-to-ensure-latex-error-messages-are-broken-across-lines.tex",
+    "File":"C:\\Users\\Antonio\\AppData\\Local\\Temp\\in-a-very-long-path-that-forces-a-third-line\\a-very-very-long-file-name-to-ensure-latex-error-messages-are-broken-across-lines.tex",
     "Row":"2",
     "Description":"A filename without spaces that goes on three lines.\nl.2 ...me without spaces that goes on three lines}"
   }
