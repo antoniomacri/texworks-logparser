@@ -174,7 +174,9 @@ LogParser.prototype.ParseOutput = function(output)
       if (match) {
         if (typeof(match[2]) != "undefined") {
           var chunk = match[0];
+          var tmp, canRevert = false;
           while (true) {
+            tmp = output;
             output = output.slice(chunk.length);
             var len = LogParser.ExpandCodePointsLength(chunk);
             // TODO: we should count preceding characters in the same line,
@@ -184,7 +186,6 @@ LogParser.prototype.ParseOutput = function(output)
               break;
             }
             output = output.slice(1); // Removes the '\n'
-            // BUG: This fails if filename terminates exactly at the end of the line.
             // We retrieve characters in the next lines until a space is found.
             var m = /^(?:(?!\))[\S])+/.exec(output);
             if (!m) {
@@ -192,6 +193,15 @@ LogParser.prototype.ParseOutput = function(output)
             }
             match[2] += m[0];
             chunk = m[0];
+            canRevert = true;
+          }
+          // If the filename terminated exactly at the end of the line, we have erroneously
+          // read characters of the succeeding line. The only check we can do is to test
+          // whether the filename contains a period in the last four chars: this should
+          // assure that there is an extension.
+          if (canRevert && match[2].slice(-4).indexOf('.') < 0) {
+            match[2] = match[2].slice(0, -chunk.length);
+            output = tmp;
           }
         }
         else {
