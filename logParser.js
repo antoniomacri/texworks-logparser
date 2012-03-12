@@ -130,18 +130,16 @@ LogParser.prototype.ParseOutput = function(output)
   // Generate or clear old results
   this.Results = [];
 
-  var currentFile = undefined;
-  var fileStack = [];
-  var extraParens = 0;
+  var data = { CurrentFile: undefined, FileStack: [], ExtraParens: 0 };
 
   while (output.length > 0) {
     // Be sure to remove any whitespace at the beginning of the string
     output = output.trimLeft();
 
-    for (var i =0; i < this.Patterns.length; ) {
+    for (var i = 0; i < this.Patterns.length; ) {
       var match = this.Patterns[i].Regex.exec(output);
       if (match) {
-        var result = this.Patterns[i].Callback(match, currentFile);
+        var result = this.Patterns[i].Callback(match, data.CurrentFile);
         if (result) {
           this.Results.push(result);
           // Always trimLeft before looking for a pattern
@@ -154,22 +152,33 @@ LogParser.prototype.ParseOutput = function(output)
       }
     }
 
+    output = LogParser.BuildFileStack(output, data);
+  }
+}
+
+
+LogParser.BuildFileStack = (function() {
+  var skipRegexp = new RegExp("^[^\n\r()]+");
+  var fileRegexp = new RegExp("^\\(\"((?:\\./|/|.\\\\|[a-zA-Z]:\\\\)(?:[^\"]|\n)+)\"|^\\(((?:\\./|/|.\\\\|[a-zA-Z]:\\\\)(?:(?!\\))[\\S])+)");
+  var fileContinuingRegexp = new RegExp("^(?:(?!\\))[\\S])+");
+  return function(output, data)
+  {
     // Go to the first parenthesis or simply skip the first line
-    var match = /^[^\n\r()]+/.exec(output);
+    var match = skipRegexp.exec(output);
     if (match) {
       output = output.slice(match[0].length);
     }
     if (output.charAt(0) == ")") {
-      if (extraParens > 0) {
-        --extraParens;
+      if (data.ExtraParens > 0) {
+        --data.ExtraParens;
       }
-      else if (fileStack.length > 0) {
-        currentFile = fileStack.pop();
+      else if (data.FileStack.length > 0) {
+        data.CurrentFile = data.FileStack.pop();
       }
       output = output.slice(1);
     }
     else if (output.charAt(0) == "(") {
-      match = new RegExp("^\\(\"((?:\\./|/|.\\\\|[a-zA-Z]:\\\\)(?:[^\"]|\n)+)\"|^\\(((?:\\./|/|.\\\\|[a-zA-Z]:\\\\)(?:(?!\\))[\\S])+)").exec(output);
+      match = fileRegexp.exec(output);
       if (match) {
         if (typeof(match[2]) != "undefined") {
           var chunk = match[0];
@@ -186,7 +195,7 @@ LogParser.prototype.ParseOutput = function(output)
             }
             output = output.slice(1); // Removes the '\n'
             // We retrieve characters in the next lines until a space is found.
-            var m = /^(?:(?!\))[\S])+/.exec(output);
+            var m = fileContinuingRegexp.exec(output);
             if (!m) {
               break;
             }
@@ -208,18 +217,19 @@ LogParser.prototype.ParseOutput = function(output)
           // always enclosed in quotes: we don't have to worry.
           output = output.slice(match[0].length);
         }
-        fileStack.push(currentFile);
+        data.FileStack.push(data.CurrentFile);
         // Filename may contain line breaks inserted by the compiler
-        currentFile = (match[1] || match[2]).replace(/\n/g, '');
-        extraParens = 0;
+        data.CurrentFile = (match[1] || match[2]).replace(/\n/g, '');
+        data.ExtraParens = 0;
       }
       else {
-        ++extraParens;
+        ++data.ExtraParens;
         output = output.slice(1);
       }
     }
-  }
-}
+    return output;
+  };
+})();
 
 
 LogParser.prototype.GenerateReport = function(onlyTable)
@@ -251,8 +261,8 @@ LogParser.prototype.GenerateReport = function(onlyTable)
     if (!onlyTable) {
       html += "<html><body>";
       html += "Errors: " + counters[2] +
-          ", Warnings: " + counters[1] +
-          ", Bad boxes: " + counters[0] + "<hr/>";
+              ", Warnings: " + counters[1] +
+              ", Bad boxes: " + counters[0] + "<hr/>";
     }
     html += "<table border='0' cellspacing='0' cellpadding='4'>";
     html += sb.toString();
@@ -293,18 +303,22 @@ LogParser.EscapeHtml = function(str) {
 }
 
 
-LogParser.GenerateResultRow = function(result) {
-  var html = '';
-  var color = [ "#8080FF", "#F8F800", "#F80000" ][result.Severity];
-  var url = 'texworks:' + result.File + (result.Row != '?' && result.Row != 0 ? '#' + result.Row : '');
-  html += '<tr>';
-  html += '<td style="background-color: ' + color + '"></td>';
-  html += '<td valign="top"><a href="' + url + '">' + result.File.match("([^\\\\/]+)$")[1] + '</a></td>';
-  html += '<td valign="top">' + result.Row + '</td>';
-  html += '<td valign="top">' + LogParser.EscapeHtml(result.Description) + '</td>';
-  html += '</tr>';
-  return html;
-}
+LogParser.GenerateResultRow = (function() {
+  var colors = [ "#8080FF", "#F8F800", "#F80000" ];
+  var getFilename = new RegExp("([^\\\\/]+)$");
+  return function(result) {
+    var html = '';
+    var color = colors[result.Severity];
+    var url = 'texworks:' + result.File + (result.Row != '?' && result.Row != 0 ? '#' + result.Row : '');
+    html += '<tr>';
+    html += '<td style="background-color: ' + color + '"></td>';
+    html += '<td valign="top"><a href="' + url + '">' + getFilename.exec(result.File)[1] + '</a></td>';
+    html += '<td valign="top">' + result.Row + '</td>';
+    html += '<td valign="top">' + LogParser.EscapeHtml(result.Description) + '</td>';
+    html += '</tr>';
+    return html;
+  };
+})();
 
 
 // We allow other scripts to use and reconfigure this parser
