@@ -138,8 +138,7 @@ LogParser.prototype.ParseOutput = function(output)
     // Be sure to remove any whitespace at the beginning of the string
     output = output.trimLeft();
 
-    for (var i =0; i < this.Patterns.length; )
-    {
+    for (var i =0; i < this.Patterns.length; ) {
       var match = this.Patterns[i].Regex.exec(output);
       if (match) {
         var result = this.Patterns[i].Callback(match, currentFile);
@@ -155,7 +154,7 @@ LogParser.prototype.ParseOutput = function(output)
       }
     }
 
-    // Go to the first parenthesis or simple skip the first line
+    // Go to the first parenthesis or simply skip the first line
     var match = /^[^\n\r()]+/.exec(output);
     if (match) {
       output = output.slice(match[0].length);

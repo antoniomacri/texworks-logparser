@@ -64,47 +64,65 @@ if (file.status == 0) {
   var marker = "-----BEGIN OUTPUT BLOCK-----\n";
   var parser = new LogParser();
 
-  var failedTests = 0;
   var sb = new StringBuilder();
-  var i = 1;
-  for (; ; i++)
-  {
-    var filename = "tests/" + i + ".test";
-    var result = TW.readFile(filename);
-    if (result.status == 2) {
-      TW.warning(null, "", "Cannot read files! Change your TeXworks settings.");
-    }
-    if (result.status != 0) {
-      break;
-    }
-    result = result.result;
-    var index = result.indexOf(marker);
-    var output = result.slice(index + marker.length);
-    result = result.slice(0, index);
-    parser.ParseOutput(output);
+  var folders = ["tests-miktex", "tests-texlive-ubuntu" ];
+  var totalTests = 0;
+  var failedTests = 0;
+  for (var i = 0; i < folders.length; i++) {
+    var grouping = false;
+    for (var j = 1; ; j++) {
+      var filename = folders[i] + "/" + j + ".test";
+      var result = TW.readFile(filename);
+      if (result.status == 2) {
+        TW.warning(null, "", "Cannot read files! Change your TeXworks settings.");
+      }
+      if (result.status != 0) {
+        break;
+      }
+      result = result.result;
 
-    var expected = eval("(function(){return " + result + ";})()");
-    var generated = parser.Results;
+      var index = result.indexOf(marker);
+      var output = result.slice(index + marker.length);
+      result = result.slice(0, index);
+      parser.ParseOutput(output);
 
-    var passed = expected.length == generated.length;
-    for (var j=0; j<expected.length && passed; j++) {
-      passed = Result.Equals(expected[j], generated[j]);
+      var expected = eval("(function(){return " + result + ";})()");
+      var generated = parser.Results;
+
+      var passed = expected.length == generated.length;
+      for (var k=0; k<expected.length && passed; k++) {
+        passed = Result.Equals(expected[k], generated[k]);
+      }
+
+      if (!passed) {
+        if (grouping) {
+          sb.append("</td></tr>");
+          grouping = false;
+        }
+        sb.append("<tr>");
+        sb.append("<td style='background-color: red'></td>");
+        sb.append("<td valign='top'>" + filename + "</td>");
+        sb.append("<td valign='top'><font size=-2>" + GenerateDiff(expected, generated) + "</font></td>");
+        sb.append("</tr>");
+      }
+      else if (grouping) {
+        sb.append(", " + filename);
+      }
+      else {
+        sb.append("<tr>");
+        sb.append("<td style='background-color: green'></td>");
+        sb.append("<td valign='top' colspan='2'>" + filename);
+        grouping = true;
+      }
+      failedTests += passed ? 0 : 1;
     }
-    sb.append("<tr>");
-    sb.append("<td style='background-color: " + (passed ? "green" : "red") + "'></td>");
-    sb.append("<td valign='top'>" + filename + "</td>");
-    if (!passed) {
-      sb.append("<td valign='top'><font size=-2>" + GenerateDiff(expected, generated) + "</font></td>");
+    if (grouping) {
+      sb.append("</td></tr>");
     }
-    else {
-      sb.append("<td valign='top'></td>");
-    }
-    sb.append("</tr>");
-    failedTests += passed ? 0 : 1;
   }
-  
+
   var html = "<html><body>";
-  html += "Total tests: " + (i - 1) +
+  html += "Total tests: " + totalTests +
           ", Failed tests: " + failedTests + "<hr/>";
   html += "<table border='0' cellspacing='0' cellpadding='4'>";
   html += sb.toString();
@@ -132,35 +150,11 @@ undefined;
 // * \\server\abc, "\\server\abc"
 
 
-    //  2. il nome/percorso del file contiene parentesi tonde chiuse;
     //  3. queste parentesi tonde chiuse (a causa delle interruzioni di riga forzate che ci mette PDFLaTeX) capitano proprio
     //     alla fine di una riga.
     
 
 /*
-Output for MiKTeX 2.9 on WinXP:
-----------------------------------------
-entering extended mode
-("C:\Dokumente und Einstellungen\test.tex"
-LaTeX2e <2009/09/24>
-----------------------------------------
-entering extended mode
-
-(C:\a-very-very-long-file-name-to-ensure-latex-error-messages-are-broken-across
--lines.tex
-----------------------------------------
-This is pdfTeX, Version 3.1415926-1.40.11 (MiKTeX 2.9)
-entering extended mode
-("C:\test file.tex"
-----------------------------------------
-" character disallowed in file names
-----------------------------------------
-This is pdfTeX, Version 3.1415926-1.40.11 (MiKTeX 2.9)
-entering extended mode
-("C:\test (file).tex"
-----------------------------------------
-
-
 Output for TL on WinXP:
 ----------------------------------------
 entering extended mode
