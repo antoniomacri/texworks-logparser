@@ -1,6 +1,6 @@
 // TeXworksScript
 // Title: Log parser tests
-// Author: Antonio Macrì
+// Author: Antonio MacrÃ¬
 // Version: 1.0
 // Date: 2012-03-07
 // Script-Type: standalone
@@ -63,61 +63,85 @@ if (file.status == 0) {
   file = null;  // free mem
 
   var marker = "-----BEGIN OUTPUT BLOCK-----\n";
-  var parser = new LogParser();
 
+  var parser = new LogParser();
   var sb = new StringBuilder();
-  var folders = [ "tests-miktex", "tests-texlive-ubuntu" ];
   var totalTests = 0;
   var failedTests = 0;
-  for (var i = 0; i < folders.length; i++) {
+
+  var fex = [];
+  fex[0] = function(){ return 2; };
+  fex[1] = function(f) {
+    var result = files.some(function(ff) {
+      return f == ff || ff.slice(0,f.length) == f && (ff[f.length]=='\\'||ff[f.length]=='/');
+    }) ? 0 : 1;
+  };
+
+  function RunTests(folder) {
     var grouping = false;
-    for (var j = 1; ; j++) {
-      var filename = folders[i] + "/" + j + ".test";
+    for (var i = 1; ; i++) {
+      var filename = folder + "/" + i + ".test";
       var result = TW.readFile(filename);
       if (result.status != 0) {
         break;
       }
       result = result.result;
-      totalTests++;
+      
+      for (var j = 0; j < fex.length; j++) {
+        TW.fileExists = fex[j];
+        totalTests++;
 
-      var index = result.indexOf(marker);
-      var output = result.slice(index + marker.length);
-      result = result.slice(0, index);
-      parser.Parse(output);
+        var index = result.indexOf(marker);
+        var output = result.slice(index + marker.length);
+        var exp = result.slice(0, index);
+        parser.Parse(output);
 
-      var expected = eval("(function(){return " + result + ";})()");
-      var generated = parser.Results;
+        var expected = eval("(function(){return " + exp + ";})()");
+        var generated = parser.Results;
 
-      var passed = expected.length == generated.length;
-      for (var k=0; k<expected.length && passed; k++) {
-        passed = Result.Equals(expected[k], generated[k]);
-      }
-
-      if (!passed) {
-        if (grouping) {
-          sb.append("</td></tr>");
-          grouping = false;
+        var passed = expected.length == generated.length;
+        for (var k=0; k<expected.length && passed; k++) {
+          passed = Result.Equals(expected[k], generated[k]);
         }
-        sb.append("<tr>");
-        sb.append("<td style='background-color: red'></td>");
-        sb.append("<td valign='top'>" + filename + "</td>");
-        sb.append("<td valign='top'><font size=-2>" + GenerateDiff(expected, generated) + "</font></td>");
-        sb.append("</tr>");
+
+        if (!passed) {
+          if (grouping) {
+            sb.append("</td></tr>");
+            grouping = false;
+          }
+          sb.append("<tr>");
+          sb.append("<td style='background-color: red'></td>");
+          sb.append("<td valign='top'>" + filename + " [" + j + "]</td>");
+          sb.append("<td valign='top'><font size=-2>" + GenerateDiff(expected, generated) + "</font></td>");
+          sb.append("</tr>");
+        }
+        else if (grouping) {
+          sb.append(", " + filename + " [" + j + "]");
+        }
+        else {
+          sb.append("<tr>");
+          sb.append("<td style='background-color: green'></td>");
+          sb.append("<td valign='top' colspan='2'>" + filename + " [" + j + "]");
+          grouping = true;
+        }
+        failedTests += passed ? 0 : 1;
       }
-      else if (grouping) {
-        sb.append(", " + filename);
-      }
-      else {
-        sb.append("<tr>");
-        sb.append("<td style='background-color: green'></td>");
-        sb.append("<td valign='top' colspan='2'>" + filename);
-        grouping = true;
-      }
-      failedTests += passed ? 0 : 1;
     }
     if (grouping) {
       sb.append("</td></tr>");
     }
+  }
+
+  var folders = [ "tests-miktex", "tests-texlive-ubuntu" ];
+  for (var j = 0; j < folders.length; j++) {
+    var files = TW.readFile(folders[j] + "/files.js");
+    if (files.status == 0) {
+      files = eval("(function(){return " + files.result + ";})()");
+    }
+    else {
+      files = [];
+    }
+    RunTests(folders[j]);
   }
 
   var html = "<html><body>";
@@ -141,17 +165,6 @@ undefined;
  * Error in a file with contained braces (e.g., 'test (file).tex')
 */
 
-// Should catch filenames of the following forms:
-// * ./abc, "./abc"
-// * /abc, "/abc"
-// * .\abc, ".\abc"
-// * C:\abc, "C:\abc"
-// * \\server\abc, "\\server\abc"
-
-
-    //  3. queste parentesi tonde chiuse (a causa delle interruzioni di riga forzate che ci mette PDFLaTeX) capitano proprio
-    //     alla fine di una riga.
-    
 
 /*
 Output for TL on WinXP:

@@ -1,8 +1,8 @@
 // TeXworksScript
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
-// Author: Antonio Macrì
-// Version: 0.7.3
+// Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
+// Version: 0.7.4
 // Date: 2012-03-18
 // Script-Type: hook
 // Hook: AfterTypeset
@@ -32,6 +32,11 @@ if(typeof(String.prototype.trim) == "undefined")
 if(typeof(String.prototype.trimLeft) == "undefined")
 {
   String.prototype.trimLeft = function() { return this.replace(/^[\s\n]+/, ""); };
+}
+
+if(typeof(String.prototype.trimRight) == "undefined")
+{
+  String.prototype.trimRight = function() { return this.replace(/[\s\n]+$/, ""); };
 }
 
 // For performance issues, we define and use a StringBuilder
@@ -126,12 +131,13 @@ function LogParser()
 }
 
 
-LogParser.prototype.Parse = function(output)
+LogParser.prototype.Parse = function(output, rootFileName)
 {
+  var skipRegexp = new RegExp("^[^\n\r()]+");
+  var currentFile = undefined, fileStack = [], extraParens = 0;
+
   // Generate or clear old results
   this.Results = [];
-
-  var data = { CurrentFile: undefined, FileStack: [], ExtraParens: 0 };
 
   while (output.length > 0) {
     // Be sure to remove any whitespace at the beginning of the string
@@ -144,7 +150,7 @@ LogParser.prototype.Parse = function(output)
     for (var i = 0; i < this.Patterns.length; ) {
       var match = this.Patterns[i].Regex.exec(output);
       if (match) {
-        var result = this.Patterns[i].Callback(match, data.CurrentFile);
+        var result = this.Patterns[i].Callback(match, currentFile);
         if (result) {
           if (result.Severity >= this.Settings.MinSeverity) {
             // Here we filter desired results
@@ -160,84 +166,159 @@ LogParser.prototype.Parse = function(output)
       }
     }
 
-    output = LogParser.BuildFileStack(output, data);
-  }
-}
-
-
-LogParser.BuildFileStack = (function() {
-  var skipRegexp = new RegExp("^[^\n\r()]+");
-  var fileRegexp = new RegExp("^\\(\"((?:\\./|/|.\\\\|[a-zA-Z]:\\\\)(?:[^\"]|\n)+)\"|^\\(((?:\\./|/|.\\\\|[a-zA-Z]:\\\\)(?:(?!\\))[\\S])+)");
-  var fileContinuingRegexp = new RegExp("^(?:(?!\\))[\\S])+");
-  return function(output, data)
-  {
     // Go to the first parenthesis or simply skip the first line
     var match = skipRegexp.exec(output);
     if (match) {
       output = output.slice(match[0].length);
     }
     if (output.charAt(0) == ")") {
-      if (data.ExtraParens > 0) {
-        --data.ExtraParens;
+      if (extraParens > 0) {
+        extraParens--;
       }
-      else if (data.FileStack.length > 0) {
-        data.CurrentFile = data.FileStack.pop();
+      else if (fileStack.length > 0) {
+        currentFile = fileStack.pop();
       }
       output = output.slice(1);
     }
     else if (output.charAt(0) == "(") {
-      match = fileRegexp.exec(output);
-      if (match) {
-        if (typeof(match[2]) != "undefined") {
-          var chunk = match[0];
-          var tmp, canRevert = false;
-          while (true) {
-            tmp = output;
-            output = output.slice(chunk.length);
-            var len = LogParser.ExpandCodePointsLength(chunk);
-            // TODO: we should count preceding characters in the same line,
-            // not simply consider 79: filenames may start in the middle of a line.
-            // A (real) test case is needed!
-            if (output[0] != '\n' || len != 79) {
-              break;
-            }
-            output = output.slice(1); // Removes the '\n'
-            // We retrieve characters in the next lines until a space is found.
-            var m = fileContinuingRegexp.exec(output);
-            if (!m) {
-              break;
-            }
-            match[2] += m[0];
-            chunk = m[0];
-            canRevert = true;
-          }
-          // If the filename terminated exactly at the end of the line, we have erroneously
-          // read characters of the succeeding line. The only check we can do is to test
-          // whether the filename contains a period in the last four chars: this should
-          // assure that there is an extension.
-          if (canRevert && match[2].slice(-4).indexOf('.') < 0) {
-            match[2] = match[2].slice(0, -chunk.length);
-            output = tmp;
-          }
-        }
-        else {
-          // If match[2] is undefined, it was captured a file with spaces,
-          // always enclosed in quotes: we don't have to worry.
-          output = output.slice(match[0].length);
-        }
-        data.FileStack.push(data.CurrentFile);
-        // Filename may contain line breaks inserted by the compiler
-        data.CurrentFile = (match[1] || match[2]).replace(/\n/g, '');
-        data.ExtraParens = 0;
+      var result = LogParser.MatchNewFile(output, rootFileName);
+      if (result) {
+        fileStack.push(currentFile);
+        currentFile = result.File;
+        output = result.Output;
+        extraParens = 0;
       }
       else {
-        ++data.ExtraParens;
+        extraParens++;
         output = output.slice(1);
       }
     }
-    return output;
+
+    this.CheckForRerunOfLatex(output);
+  }
+  this.WarnAuxFiles();
+}
+
+
+LogParser.MatchNewFile = (function()
+{
+  // Should catch filenames of the following forms:
+  //  * ./abc, "./abc"
+  //  * /abc, "/abc"
+  //  * .\abc, ".\abc"
+  //  * C:\abc, "C:\abc"
+  //  * \\server\abc, "\\server\abc"    <-- TODO: is it really needed?
+  var fileRegexp = new RegExp('^\\("((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)(?:[^"]|\n)+)"|^\\(((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)[^()\n]+)');
+  var fileContinuingRegexp = new RegExp('[/\\\\()\n]');
+  var filenameRegexp = new RegExp("[^\\.]\.[a-zA-Z0-9]{1,4}$");
+  function canBeFilename(s) {
+    return filenameRegexp.test(s);
+  }
+  function getBasePath(path) {
+    var i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    return (i == -1) ? path : path.slice(0, i+1);
+  }
+  function getLengthInBytes(s) {
+    // Non-ASCII chars occupy more than one byte: the compiler
+    // breaks after 79 *bytes*, not chars!
+    for (var k = 0, len = s.length; k < len; k++) {
+      if (s.charCodeAt(k) > 0x7F) len++;
+      if (s.charCodeAt(k) > 0x7FF) len++;
+      if (s.charCodeAt(k) > 0xFFFF) len++;
+    }
+    return len;
+  }
+  const EXISTS = 0;
+  const MAYEXIST = 2;
+  const DOESNTEXIST = 1;
+  const max_print_line = 79;
+  // The algorithm works as follows.
+  // If the path starts with a quote ("), we are on MiKTeX and the path contains spaces.
+  // We just have to read until the next \".
+  // Otherwise, we use a double approach: first, we rely on TW.fileExists; second, we
+  // check the length of the line. TW.fileExists can return the actual response (EXISTS,
+  // DOESNTEXIST) or not (MAYEXIST). Counting the length of the line can be useful to
+  // recognize files on multiple lines: a file can continue on the next line only if
+  // has been reached the end of the current line.
+  // If we know for sure if the file exists, we return an appropriate result.
+  // Otherwise we guess if it can be a valid filename, possibly spanning on multiple
+  // lines, and remember such candidate when looking ahead for additional chunks.
+  return function (output,rootFileName) {
+    rootFileName = rootFileName || "";
+    var match = fileRegexp.exec(output);
+    if (match) {
+      output = output.slice(match[0].length);
+      if (typeof(match[2]) != "undefined") {
+        var basePath = match[2][0] == '.' ? getBasePath(rootFileName) : "";
+        var m, svmatch = null, svoutput = null;
+        // TODO: we should count preceding characters in the same line, not simply
+        // consider max_print_line: filenames may start in the middle of a line.
+        // A (real) test case is needed!
+        var len = getLengthInBytes(match[0]);
+        while (m = fileContinuingRegexp.exec(output)) {
+          var sepPos = output.indexOf(m[0]);
+          var chunk = output.slice(0, sepPos);
+          // trimRight to remove possible spaces before an opening parenthesis
+          match[2] += chunk.trimRight();
+          len += getLengthInBytes(chunk);
+          var existence = TW.fileExists(basePath + match[2]);
+          if (m[0] == '(' || m[0] == ')' || existence == EXISTS) {
+            output = output.slice(sepPos);
+            break;
+          }
+          if ((m[0] == '/' || m[0] == '\\') && existence == DOESNTEXIST) {
+            return null;
+          }
+          output = output.slice(sepPos + 1);
+          if (m[0] != '\n') {
+            match[2] += m[0];
+            len++;
+          }
+          else if (len % max_print_line) {
+            if (existence == DOESNTEXIST)
+              return null;
+            if (!canBeFilename(match[2])) {
+              if (!svmatch)
+                return null;
+              match[2] = svmatch;
+              output = svoutput;
+            }
+            break;
+          }
+          else if (canBeFilename(match[2])) {
+            svmatch = match[2];
+            svoutput = output;
+          }
+        }
+      }
+      else {
+        match[1] = match[1].replace(/\n/g, '');
+      }
+      return { Output: output, File: (match[1] || match[2])};
+    }
+    return null;
   };
 })();
+
+
+LogParser.prototype.CheckForRerunOfLatex = (function()
+{
+  var latexmkApplyingRule = new RegExp("^Latexmk: applying rule \'(.*)\'");
+  return function(output) {
+    if (latexmkApplyingRule.exec(output)) {
+      this.Results = [];
+    }
+  };
+})();
+
+
+LogParser.prototype.WarnAuxFiles = function()
+{
+  for (var i = 0, len = this.Results.length; i < len; i++) {
+    if (this.Results[i].Description.indexOf("File ended while scanning use of") > -1)
+      TW.target.removeAuxFiles();
+  }
+}
 
 
 LogParser.prototype.GenerateReport = function(onlyTable)
@@ -286,19 +367,6 @@ LogParser.prototype.GenerateReport = function(onlyTable)
 }
 
 
-LogParser.ExpandCodePointsLength = function(s)
-{
-  // Non-ASCII chars occupy more than one byte
-  var len = s.length;
-  for (var k = 0; k < s.length; k++) {
-    if (s.charCodeAt(k) > 0x7F) len++;
-    if (s.charCodeAt(k) > 0x7FF) len++;
-    if (s.charCodeAt(k) > 0xFFFF) len++;
-  }
-  return len;
-}
-
-
 LogParser.EscapeHtml = function(str)
 {
   var html = str;
@@ -335,7 +403,7 @@ LogParser.GenerateResultRow = (function()
 // We allow other scripts to use and reconfigure this parser
 if (typeof(justLoad) == "undefined") {
   var parser = new LogParser();
-  parser.Parse(TW.target.consoleOutput);
+  parser.Parse(TW.target.consoleOutput, TW.target.rootFileName);
   TW.result = parser.GenerateReport();
 }
 undefined;
