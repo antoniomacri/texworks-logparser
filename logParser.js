@@ -2,8 +2,8 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
-// Version: 0.7.5
-// Date: 2012-03-19
+// Version: 0.7.6
+// Date: 2012-03-20
 // Script-Type: hook
 // Hook: AfterTypeset
 
@@ -26,34 +26,26 @@
 // String.trim() and String.trimLeft() were introduced in Qt 4.7
 if(typeof(String.prototype.trim) == "undefined")
 {
-  String.prototype.trim = function() { return this.replace(/^[\s\n]+|[\s\n]+$/g, ""); };
+  String.prototype.trim = (function() {
+    var re = /^[\s\n]+|[\s\n]+$/g;
+    return function() { return this.replace(re, ""); };
+  })();
 }
 
 if(typeof(String.prototype.trimLeft) == "undefined")
 {
-  String.prototype.trimLeft = function() { return this.replace(/^[\s\n]+/, ""); };
+  String.prototype.trimLeft = (function() {
+    var re = /^[\s\n]+/;
+    return function() { return this.replace(re, ""); };
+  })();
 }
 
 if(typeof(String.prototype.trimRight) == "undefined")
 {
-  String.prototype.trimRight = function() { return this.replace(/[\s\n]+$/, ""); };
-}
-
-// For performance issues, we define and use a StringBuilder
-function StringBuilder()
-{
-  this.buffer = [];
-}
-
-StringBuilder.prototype.append = function(s)
-{
-  this.buffer.push(s);
-  return this;
-}
-
-StringBuilder.prototype.toString = function()
-{
-  return this.buffer.join("");
+  String.prototype.trimRight = (function() {
+    var re = /[\s\n]+$/;
+    return function() { return this.replace(re, ""); };
+  })();
 }
 
 // Enums
@@ -164,7 +156,7 @@ LogParser.prototype.Parse = function(output, rootFileName)
     // unbalanced parenthesis: we'd better look for every pattern, to
     // gobble such text and avoid those parenthesis conflict with the
     // file stack.
-    for (var i = 0; i < this.Patterns.length; ) {
+    for (var i = 0, len = this.Patterns.length; i < len; ) {
       var match = this.Patterns[i].Regex.exec(output);
       if (match) {
         var result = this.Patterns[i].Callback(match, currentFile);
@@ -188,12 +180,10 @@ LogParser.prototype.Parse = function(output, rootFileName)
       output = output.slice(match[0].length);
     }
     if (output.charAt(0) == ")") {
-      if (extraParens > 0) {
+      if (extraParens > 0)
         extraParens--;
-      }
-      else if (fileStack.length > 0) {
+      else if (fileStack.length > 0)
         currentFile = fileStack.pop();
-      }
       output = output.slice(1);
     }
     else if (output.charAt(0) == "(") {
@@ -227,22 +217,20 @@ LogParser.MatchNewFile = (function()
   var fileRegexp = new RegExp('^\\("((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)(?:[^"]|\n)+)"|^\\(((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)[^()\n]+)');
   var fileContinuingRegexp = new RegExp('[/\\\\()\n]');
   var filenameRegexp = new RegExp("[^\\.]\.[a-zA-Z0-9]{1,4}$");
-  function canBeFilename(s) {
-    return filenameRegexp.test(s);
-  }
   function getBasePath(path) {
     var i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
     return (i == -1) ? path : path.slice(0, i+1);
   }
+  // Non-ASCII chars occupy more than one byte: the compiler
+  // breaks after 79 *bytes*, not chars!
   function getLengthInBytes(s) {
-    // Non-ASCII chars occupy more than one byte: the compiler
-    // breaks after 79 *bytes*, not chars!
-    for (var k = 0, len = s.length; k < len; k++) {
-      if (s.charCodeAt(k) > 0x7F) len++;
-      if (s.charCodeAt(k) > 0x7FF) len++;
-      if (s.charCodeAt(k) > 0xFFFF) len++;
+    var r = s.length;
+    for (var k = 0, l = r; k < l; k++) {
+      if (s.charCodeAt(k) > 0xFFFF) r+=3;
+      else if (s.charCodeAt(k) > 0x7FF) r+=2;
+      else if (s.charCodeAt(k) > 0x7F) r++;
     }
-    return len;
+    return r;
   }
   const EXISTS = 0;
   const MAYEXIST = 2;
@@ -277,8 +265,10 @@ LogParser.MatchNewFile = (function()
           // trimRight to remove possible spaces before an opening parenthesis
           match[2] += chunk.trimRight();
           len += getLengthInBytes(chunk);
-          var existence = TW.fileExists(basePath + match[2]);
-          if (m[0] == '(' || m[0] == ')' || existence == EXISTS) {
+          var existence;
+          if (m[0] == '(' || m[0] == ')' ||
+              // We call TW.fileExists only if it is really needed
+              (existence = TW.fileExists(basePath + match[2])) == EXISTS) {
             output = output.slice(sepPos);
             break;
           }
@@ -293,7 +283,7 @@ LogParser.MatchNewFile = (function()
           else if (len % max_print_line) {
             if (existence == DOESNTEXIST)
               return null;
-            if (!canBeFilename(match[2])) {
+            if (!filenameRegexp.test(match[2])) {
               if (!svmatch)
                 return null;
               match[2] = svmatch;
@@ -301,7 +291,7 @@ LogParser.MatchNewFile = (function()
             }
             break;
           }
-          else if (canBeFilename(match[2])) {
+          else if (filenameRegexp.test(match[2])) {
             svmatch = match[2];
             svoutput = output;
           }
@@ -341,27 +331,6 @@ LogParser.prototype.GenerateReport = function(onlyTable)
 {
   if (this.Results.length > 0) {
     var counters = [ 0, 0, 0 ];
-    var sb = new StringBuilder();
-    if (this.Settings.SortBy == SortBy.Severity) {
-      var reordered = [[], [], []];
-      for(var i = 0; i < this.Results.length; i++)  {
-        var result = this.Results[i];
-        reordered[result.Severity].push(result);
-        counters[result.Severity]++;
-      }
-      for(var i = reordered.length-1; i >= 0; i--) {
-        for(var j = 0; j < reordered[i].length; j++)
-          sb.append(LogParser.GenerateResultRow(reordered[i][j]));
-      }
-    }
-    else {
-      for(var i = 0; i < this.Results.length; i++)  {
-        var result = this.Results[i];
-        sb.append(LogParser.GenerateResultRow(result));
-        counters[result.Severity]++;
-      }
-    }
-
     var html = "";
     if (!onlyTable) {
       html += "<html><body>";
@@ -370,7 +339,25 @@ LogParser.prototype.GenerateReport = function(onlyTable)
               ", Bad boxes: " + counters[Severity.BadBox] + "<hr/>";
     }
     html += "<table border='0' cellspacing='0' cellpadding='4'>";
-    html += sb.toString();
+    if (this.Settings.SortBy == SortBy.Severity) {
+      var reordered = [[], [], []];
+      for(var i = 0, len = this.Results.length; i < len; i++) {
+        var result = this.Results[i];
+        reordered[result.Severity].push(result);
+        counters[result.Severity]++;
+      }
+      for(var i = reordered.length-1; i >= 0; i--) {
+        for(var j = 0, len = reordered[i].length; j < len; j++)
+          html += LogParser.GenerateResultRow(reordered[i][j]);
+      }
+    }
+    else {
+      for(var i = 0, len = this.Results.length; i < len; i++) {
+        var result = this.Results[i];
+        html += LogParser.GenerateResultRow(result);
+        counters[result.Severity]++;
+      }
+    }
     html += "</table>";
     if (!onlyTable) {
       html += "</body></html>";

@@ -28,9 +28,9 @@ justLoad = null;
 
 function GenerateDiff(expected, unexpected)
 {
-  var sb =  new StringBuilder();
-  sb.append("<table border='0' cellspacing='0' cellpadding='4'>");
-  sb.append("<tr><td></td><td colspan='3'>Expected:</td></tr>");
+  var s = "";
+  s += "<table border='0' cellspacing='0' cellpadding='4'>";
+  s += "<tr><td></td><td colspan='3'>Expected:</td></tr>";
   var k = 0;
   for (var i=0; i < expected.length; i++) {
     for (var j=k; j < unexpected.length; j++) {
@@ -43,17 +43,17 @@ function GenerateDiff(expected, unexpected)
       }
     }
     if (j == unexpected.length) {
-      sb.append(LogParser.GenerateResultRow(expected[i]));
+      s += LogParser.GenerateResultRow(expected[i]);
     }
   }
   if (k < unexpected.length) {
-    sb.append("<tr><td></td><td colspan='3'>Unexpected:</td></tr>");
+    s += "<tr><td></td><td colspan='3'>Unexpected:</td></tr>";
     for (; k<unexpected.length; k++) {
-      sb.append(LogParser.GenerateResultRow(unexpected[k]));
+      s += LogParser.GenerateResultRow(unexpected[k]);
     }
   }
-  sb.append("</table>");
-  return sb.toString();
+  s += "</table>";
+  return s;
 }
 
 
@@ -65,7 +65,6 @@ if (file.status == 0) {
   var marker = "-----BEGIN OUTPUT BLOCK-----\n";
 
   var parser = new LogParser();
-  var sb = new StringBuilder();
   var totalTests = 0;
   var failedTests = 0;
 
@@ -77,6 +76,8 @@ if (file.status == 0) {
     }) ? 0 : 1;
   };
 
+  var s = "";
+
   function RunTests(folder) {
     var grouping = false;
     for (var i = 1; ; i++) {
@@ -86,7 +87,7 @@ if (file.status == 0) {
         break;
       }
       result = result.result;
-      
+
       for (var j = 0; j < fex.length; j++) {
         TW.fileExists = fex[j];
         totalTests++;
@@ -106,29 +107,29 @@ if (file.status == 0) {
 
         if (!passed) {
           if (grouping) {
-            sb.append("</td></tr>");
+            s += "</td></tr>";
             grouping = false;
           }
-          sb.append("<tr>");
-          sb.append("<td style='background-color: red'></td>");
-          sb.append("<td valign='top'>" + filename + " [" + j + "]</td>");
-          sb.append("<td valign='top'><font size=-2>" + GenerateDiff(expected, generated) + "</font></td>");
-          sb.append("</tr>");
+          s += "<tr>";
+          s += "<td style='background-color: red'></td>";
+          s += "<td valign='top'>" + filename + " [" + j + "]</td>";
+          s += "<td valign='top'><font size=-2>" + GenerateDiff(expected, generated) + "</font></td>";
+          s += "</tr>";
         }
         else if (grouping) {
-          sb.append(", " + filename + " [" + j + "]");
+          s += ", " + filename + " [" + j + "]";
         }
         else {
-          sb.append("<tr>");
-          sb.append("<td style='background-color: green'></td>");
-          sb.append("<td valign='top' colspan='2'>" + filename + " [" + j + "]");
+          s += "<tr>";
+          s += "<td style='background-color: green'></td>";
+          s += "<td valign='top' colspan='2'>" + filename + " [" + j + "]";
           grouping = true;
         }
         failedTests += passed ? 0 : 1;
       }
     }
     if (grouping) {
-      sb.append("</td></tr>");
+      s += "</td></tr>";
     }
   }
 
@@ -148,7 +149,7 @@ if (file.status == 0) {
   html += "Total tests: " + totalTests +
           ", Failed tests: " + failedTests + "<hr/>";
   html += "<table border='0' cellspacing='0' cellpadding='4'>";
-  html += sb.toString();
+  html += s;
   html += "</table></body></html>";
   TW.result = html;
 }
