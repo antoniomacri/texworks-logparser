@@ -74,6 +74,7 @@ if (file.status == 0) {
     var result = files.some(function(ff) {
       return f == ff || ff.slice(0,f.length) == f && (ff[f.length]=='\\'||ff[f.length]=='/');
     }) ? 0 : 1;
+    return result;
   };
 
   var s = "";

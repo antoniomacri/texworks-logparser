@@ -2,7 +2,7 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
-// Version: 0.7.6
+// Version: 0.7.7
 // Date: 2012-03-20
 // Script-Type: hook
 // Hook: AfterTypeset
@@ -22,6 +22,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
+// Should be set equal to the environment variable max_print_line
+const max_print_line = 79;
 
 // String.trim() and String.trimLeft() were introduced in Qt 4.7
 if(typeof(String.prototype.trim) == "undefined")
@@ -91,7 +94,7 @@ function LogParser()
     },
     {
       // This pattern matches critical errors:
-      // "File ended while scanning use|definition of ...", 
+      // "File ended while scanning use|definition of ...",
       // "Missing \begin{document}.", "Emergency stop."
       Regex: new RegExp("^!\\s+(.+)\n"),
       Callback: function(m, f) {
@@ -124,11 +127,10 @@ function LogParser()
       }
     },
     {
-      // This pattern recognizes badboxes. Each message can span over multiple lines.
-      // TODO: how to determine when it ends?
-      Regex: new RegExp("^((?:Under|Over)full \\\\[hv]box\\s*\\([^)]+\\) in paragraph at lines (\\d+)--\\d+)\n.+"),
+      // This pattern recognizes badboxes on one, two or more lines.
+      Regex: new RegExp("^((?:Under|Over)full \\\\[hv]box\\s*\\([^)]+\\) in paragraph at lines (\\d+)--\\d+\n)((?:.{" + max_print_line + "}\n)*)(.+)"),
       Callback: function(m, f) {
-        return new Result(Severity.BadBox, f, m[2], m[0].trim());
+        return new Result(Severity.BadBox, f, m[2], m[1] + m[3].replace(/\n/g, '') + m[4].trimRight());
       }
     }
   ];
@@ -214,9 +216,9 @@ LogParser.MatchNewFile = (function()
   //  * .\abc, ".\abc"
   //  * C:\abc, "C:\abc"
   //  * \\server\abc, "\\server\abc"    <-- TODO: is it really needed?
-  var fileRegexp = new RegExp('^\\("((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)(?:[^"]|\n)+)"|^\\(((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)[^()\n]+)');
-  var fileContinuingRegexp = new RegExp('[/\\\\()\n]');
-  var filenameRegexp = new RegExp("[^\\.]\.[a-zA-Z0-9]{1,4}$");
+  var fileRegexp = new RegExp('^\\("((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)(?:[^"]|\n)+)"|^\\(((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)[^ ()\n]+)');
+  var fileContinuingRegexp = new RegExp('[/\\\\ ()\n]');
+  var filenameRegexp = new RegExp("[^\\.]\\.[a-zA-Z0-9]{1,4}$");
   function getBasePath(path) {
     var i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
     return (i == -1) ? path : path.slice(0, i+1);
@@ -235,7 +237,6 @@ LogParser.MatchNewFile = (function()
   const EXISTS = 0;
   const MAYEXIST = 2;
   const DOESNTEXIST = 1;
-  const max_print_line = 79;
   // The algorithm works as follows.
   // If the path starts with a quote ("), we are on MiKTeX and the path contains spaces.
   // We just have to read until the next \".
@@ -262,20 +263,26 @@ LogParser.MatchNewFile = (function()
         while (m = fileContinuingRegexp.exec(output)) {
           var sepPos = output.indexOf(m[0]);
           var chunk = output.slice(0, sepPos);
-          // trimRight to remove possible spaces before an opening parenthesis
-          match[2] += chunk.trimRight();
+          match[2] += chunk;
           len += getLengthInBytes(chunk);
-          var existence;
-          if (m[0] == '(' || m[0] == ')' ||
-              // We call TW.fileExists only if it is really needed
-              (existence = TW.fileExists(basePath + match[2])) == EXISTS) {
+          if (m[0] == '(' || m[0] == ')') {
             output = output.slice(sepPos);
             break;
           }
-          if ((m[0] == '/' || m[0] == '\\') && existence == DOESNTEXIST) {
-            return null;
-          }
           output = output.slice(sepPos + 1);
+          var existence = TW.fileExists(basePath + match[2]);
+          if (m[0] == '/' || m[0] == '\\') {
+            if (existence == DOESNTEXIST)
+              return null;
+          }
+          else {
+            if (existence == EXISTS)
+              break;
+            if (existence == MAYEXIST && filenameRegexp.test(match[2])) {
+              svmatch = match[2];
+              svoutput = output;
+            }
+          }
           if (m[0] != '\n') {
             match[2] += m[0];
             len++;
@@ -291,11 +298,9 @@ LogParser.MatchNewFile = (function()
             }
             break;
           }
-          else if (filenameRegexp.test(match[2])) {
-            svmatch = match[2];
-            svoutput = output;
-          }
         }
+        // trimRight to remove possible spaces before an opening parenthesis
+        match[2] = match[2].trimRight();
       }
       else {
         match[1] = match[1].replace(/\n/g, '');
@@ -392,7 +397,7 @@ LogParser.GenerateResultRow = (function()
     var color = colors[result.Severity];
     var file = "&#8212;";
     if (typeof(result.File) != "undefined") {
-      file = "<a href='texworks:" + escape(result.File) +
+      file = "<a href='texworks:" + encodeURI(result.File) +
              (result.Row ? '#' + result.Row : '') + "'>" +
              getFilename.exec(result.File)[1] + "</a>";
     }
