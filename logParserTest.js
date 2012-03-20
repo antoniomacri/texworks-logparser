@@ -56,6 +56,7 @@ function GenerateDiff(expected, unexpected)
   return sb.toString();
 }
 
+
 var file = TW.readFile("logParser.js");
 if (file.status == 0) {
   eval(file.result);
@@ -65,7 +66,7 @@ if (file.status == 0) {
   var parser = new LogParser();
 
   var sb = new StringBuilder();
-  var folders = ["tests-miktex", "tests-texlive-ubuntu" ];
+  var folders = [ "tests-miktex", "tests-texlive-ubuntu" ];
   var totalTests = 0;
   var failedTests = 0;
   for (var i = 0; i < folders.length; i++) {
@@ -73,18 +74,16 @@ if (file.status == 0) {
     for (var j = 1; ; j++) {
       var filename = folders[i] + "/" + j + ".test";
       var result = TW.readFile(filename);
-      if (result.status == 2) {
-        TW.warning(null, "", "Cannot read files! Change your TeXworks settings.");
-      }
       if (result.status != 0) {
         break;
       }
       result = result.result;
+      totalTests++;
 
       var index = result.indexOf(marker);
       var output = result.slice(index + marker.length);
       result = result.slice(0, index);
-      parser.ParseOutput(output);
+      parser.Parse(output);
 
       var expected = eval("(function(){return " + result + ";})()");
       var generated = parser.Results;

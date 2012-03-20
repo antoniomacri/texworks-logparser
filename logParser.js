@@ -2,8 +2,8 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Antonio Macrì
-// Version: 0.7.2
-// Date: 2012-03-11
+// Version: 0.7.3
+// Date: 2012-03-18
 // Script-Type: hook
 // Hook: AfterTypeset
 
@@ -21,6 +21,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 
 // String.trim() and String.trimLeft() were introduced in Qt 4.7
 if(typeof(String.prototype.trim) == "undefined")
@@ -120,12 +121,12 @@ function LogParser()
 
   this.Settings = {
     SortBy: SortBy.Occurrence,
-    MinimumSeverity: Severity.BadBox
+    MinSeverity: Severity.BadBox
   };
 }
 
 
-LogParser.prototype.ParseOutput = function(output)
+LogParser.prototype.Parse = function(output)
 {
   // Generate or clear old results
   this.Results = [];
@@ -136,12 +137,19 @@ LogParser.prototype.ParseOutput = function(output)
     // Be sure to remove any whitespace at the beginning of the string
     output = output.trimLeft();
 
+    // Text matched by some patterns (especially badboxes) may contain
+    // unbalanced parenthesis: we'd better look for every pattern, to
+    // gobble such text and avoid those parenthesis conflict with the
+    // file stack.
     for (var i = 0; i < this.Patterns.length; ) {
       var match = this.Patterns[i].Regex.exec(output);
       if (match) {
         var result = this.Patterns[i].Callback(match, data.CurrentFile);
         if (result) {
-          this.Results.push(result);
+          if (result.Severity >= this.Settings.MinSeverity) {
+            // Here we filter desired results
+            this.Results.push(result);
+          }
           // Always trimLeft before looking for a pattern
           output = output.slice(match[0].length).trimLeft();
           i = 0;
@@ -260,9 +268,9 @@ LogParser.prototype.GenerateReport = function(onlyTable)
     var html = "";
     if (!onlyTable) {
       html += "<html><body>";
-      html += "Errors: " + counters[2] +
-              ", Warnings: " + counters[1] +
-              ", Bad boxes: " + counters[0] + "<hr/>";
+      html += "Errors: " + counters[Severity.Error] +
+              ", Warnings: " + counters[Severity.Warning] +
+              ", Bad boxes: " + counters[Severity.BadBox] + "<hr/>";
     }
     html += "<table border='0' cellspacing='0' cellpadding='4'>";
     html += sb.toString();
@@ -291,7 +299,8 @@ LogParser.ExpandCodePointsLength = function(s)
 }
 
 
-LogParser.EscapeHtml = function(str) {
+LogParser.EscapeHtml = function(str)
+{
   var html = str;
   html = html.replace(/&/g, "&amp;");
   html = html.replace(/</g, "&lt;");
@@ -303,7 +312,8 @@ LogParser.EscapeHtml = function(str) {
 }
 
 
-LogParser.GenerateResultRow = (function() {
+LogParser.GenerateResultRow = (function()
+{
   var colors = [ "#8080FF", "#F8F800", "#F80000" ];
   var getFilename = new RegExp("([^\\\\/]+)$");
   return function(result) {
@@ -321,10 +331,11 @@ LogParser.GenerateResultRow = (function() {
 })();
 
 
+
 // We allow other scripts to use and reconfigure this parser
-if (typeof(justLoad) == "undefined")  {
+if (typeof(justLoad) == "undefined") {
   var parser = new LogParser();
-  parser.ParseOutput(TW.target.consoleOutput);
+  parser.Parse(TW.target.consoleOutput);
   TW.result = parser.GenerateReport();
 }
 undefined;
