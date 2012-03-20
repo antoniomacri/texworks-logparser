@@ -2,8 +2,8 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
-// Version: 0.7.4
-// Date: 2012-03-18
+// Version: 0.7.5
+// Date: 2012-03-19
 // Script-Type: hook
 // Hook: AfterTypeset
 
@@ -80,13 +80,30 @@ function LogParser()
 {
   this.Patterns = [
     {
+      // This pattern is similar to the next one: this reads another
+      // line after "l.\d" (for errors such as "Undefined control sequence").
+      Regex: new RegExp("^!\\s+((?:.*\n)+?(l\\.(\\d+).*)\n(\\s+).*)\n"),
+      Callback: function(m, f) {
+        return m[4].length == m[2].length ? new Result(Severity.Error, f, m[3], m[1]) : null;
+      }
+    },
+    {
       // This pattern recognizes all errors generated with \errmessage,
       // that is, starting with "!" and containing "l.\d+".
       // The macro \GenericError uses \errmessage internally.
       // Macros \@latex@error and \(Class|Package)Error use \GenericError.
-      Regex: new RegExp("^!\\s((?:.*\n)+?l\\.(\\d+)\\s(?:.*\\S.*\n)+)"),
+      Regex: new RegExp("^!\\s+((?:.*\n)+?l\\.(\\d+)\\s(?:.*\\S.*\n)?)"),
       Callback: function(m, f) {
         return new Result(Severity.Error, f, m[2], m[1].trim());
+      }
+    },
+    {
+      // This pattern matches critical errors:
+      // "File ended while scanning use|definition of ...", 
+      // "Missing \begin{document}.", "Emergency stop."
+      Regex: new RegExp("^!\\s+(.+)\n"),
+      Callback: function(m, f) {
+        return new Result(Severity.Error, f, 0, m[1]);
       }
     },
     {
@@ -159,11 +176,10 @@ LogParser.prototype.Parse = function(output, rootFileName)
           // Always trimLeft before looking for a pattern
           output = output.slice(match[0].length).trimLeft();
           i = 0;
+          continue;
         }
       }
-      else {
-        i++;
-      }
+      i++;
     }
 
     // Go to the first parenthesis or simply skip the first line
@@ -387,11 +403,16 @@ LogParser.GenerateResultRow = (function()
   return function(result) {
     var html = '';
     var color = colors[result.Severity];
-    var url = 'texworks:' + result.File + (result.Row != '?' && result.Row != 0 ? '#' + result.Row : '');
+    var file = "&#8212;";
+    if (typeof(result.File) != "undefined") {
+      file = "<a href='texworks:" + escape(result.File) +
+             (result.Row ? '#' + result.Row : '') + "'>" +
+             getFilename.exec(result.File)[1] + "</a>";
+    }
     html += '<tr>';
     html += '<td style="background-color: ' + color + '"></td>';
-    html += '<td valign="top"><a href="' + url + '">' + getFilename.exec(result.File)[1] + '</a></td>';
-    html += '<td valign="top">' + result.Row + '</td>';
+    html += '<td valign="top">' + file + '</td>';
+    html += '<td valign="top">' + (result.Row || '') + '</td>';
     html += '<td valign="top">' + LogParser.EscapeHtml(result.Description) + '</td>';
     html += '</tr>';
     return html;
