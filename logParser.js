@@ -2,8 +2,8 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
-// Version: 0.7.7
-// Date: 2012-03-20
+// Version: 0.7.8
+// Date: 2012-03-21
 // Script-Type: hook
 // Hook: AfterTypeset
 
@@ -136,7 +136,7 @@ function LogParser()
   ];
 
   this.Settings = {
-    SortBy: SortBy.Occurrence,
+    SortBy: SortBy.Severity,
     MinSeverity: Severity.BadBox
   };
 }
@@ -215,8 +215,8 @@ LogParser.MatchNewFile = (function()
   //  * /abc, "/abc"
   //  * .\abc, ".\abc"
   //  * C:\abc, "C:\abc"
-  //  * \\server\abc, "\\server\abc"    <-- TODO: is it really needed?
-  var fileRegexp = new RegExp('^\\("((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)(?:[^"]|\n)+)"|^\\(((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\)[^ ()\n]+)');
+  //  * \\server\abc, "\\server\abc"
+  var fileRegexp = new RegExp('^\\("((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\|\\\\\\\\)(?:[^"]|\n)+)"|^\\(((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\|\\\\\\\\)[^ ()\n]+)');
   var fileContinuingRegexp = new RegExp('[/\\\\ ()\n]');
   var filenameRegexp = new RegExp("[^\\.]\\.[a-zA-Z0-9]{1,4}$");
   function getBasePath(path) {
@@ -325,9 +325,15 @@ LogParser.prototype.CheckForRerunOfLatex = (function()
 
 LogParser.prototype.WarnAuxFiles = function()
 {
-  for (var i = 0, len = this.Results.length; i < len; i++) {
-    if (this.Results[i].Description.indexOf("File ended while scanning use of") > -1)
-      TW.target.removeAuxFiles();
+  for (var i = this.Results.length-1; i > 0; i--) {
+    if (this.Results[i].Description.indexOf("File ended while scanning use of") > -1) {
+      if (TW.question(null, "", "While typesetting, a corrupt .aux " +
+        "file from a previous run was detected. You should remove " +
+        "it and rerun the typesetting process. Do you want to display" +
+        "the \"Remove Aux Files...\" dialog now?", 0x14000) == 0x4000)
+        TW.target.removeAuxFiles();
+      break;
+    }
   }
 }
 
@@ -336,25 +342,15 @@ LogParser.prototype.GenerateReport = function(onlyTable)
 {
   if (this.Results.length > 0) {
     var counters = [ 0, 0, 0 ];
-    var html = "";
-    if (!onlyTable) {
-      html += "<html><body>";
-      html += "Errors: " + counters[Severity.Error] +
-              ", Warnings: " + counters[Severity.Warning] +
-              ", Bad boxes: " + counters[Severity.BadBox] + "<hr/>";
-    }
-    html += "<table border='0' cellspacing='0' cellpadding='4'>";
+    var html = "<table border='0' cellspacing='0' cellpadding='4'>";
     if (this.Settings.SortBy == SortBy.Severity) {
-      var reordered = [[], [], []];
+      var htmls = [ "", "", "" ];
       for(var i = 0, len = this.Results.length; i < len; i++) {
         var result = this.Results[i];
-        reordered[result.Severity].push(result);
+        htmls[result.Severity] += LogParser.GenerateResultRow(result);
         counters[result.Severity]++;
       }
-      for(var i = reordered.length-1; i >= 0; i--) {
-        for(var j = 0, len = reordered[i].length; j < len; j++)
-          html += LogParser.GenerateResultRow(reordered[i][j]);
-      }
+      html += htmls.reverse().join("");
     }
     else {
       for(var i = 0, len = this.Results.length; i < len; i++) {
@@ -365,7 +361,13 @@ LogParser.prototype.GenerateReport = function(onlyTable)
     }
     html += "</table>";
     if (!onlyTable) {
-      html += "</body></html>";
+      var h = "<html><body>";
+      h += "Errors: " + counters[Severity.Error] +
+           ", Warnings: " + counters[Severity.Warning] +
+           ", Bad boxes: " + counters[Severity.BadBox] + "<hr/>";
+      h += html;
+      h += "</body></html>";
+      html = h;
     }
     return html;
   }

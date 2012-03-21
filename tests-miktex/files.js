@@ -1,4 +1,6 @@
 [
+  "\\\\BELLDELL\\Users\\Antonio\\docs\\errori.tex",
+  "\\\\BELLDELL\\Users\\Antonio\\docs\\errori.aux",
   "C:\\Program Files\\MiKTeX 2.9\\tex\\generic\\babel\\babel.def",
   "C:\\Program Files\\MiKTeX 2.9\\tex\\generic\\babel\\babel.sty",
   "C:\\Program Files\\MiKTeX 2.9\\tex\\generic\\babel\\italian.ldf",
