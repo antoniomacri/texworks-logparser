@@ -2,8 +2,8 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
-// Version: 0.7.8
-// Date: 2012-03-21
+// Version: 0.7.9
+// Date: 2012-03-23
 // Script-Type: hook
 // Hook: AfterTypeset
 
@@ -228,9 +228,10 @@ LogParser.MatchNewFile = (function()
   function getLengthInBytes(s) {
     var r = s.length;
     for (var k = 0, l = r; k < l; k++) {
-      if (s.charCodeAt(k) > 0xFFFF) r+=3;
-      else if (s.charCodeAt(k) > 0x7FF) r+=2;
-      else if (s.charCodeAt(k) > 0x7F) r++;
+      if (s.charCodeAt(k) <= 0x7F) continue;
+      else if (s.charCodeAt(k) <= 0x7FF) r+=1;
+      else if (s.charCodeAt(k) <= 0xFFFF) r+=2;
+      else r+=3;
     }
     return r;
   }
@@ -393,7 +394,7 @@ LogParser.EscapeHtml = function(str)
 LogParser.GenerateResultRow = (function()
 {
   var colors = [ "#8080FF", "#F8F800", "#F80000" ];
-  var getFilename = new RegExp("([^\\\\/]+)$");
+  var getFilename = new RegExp("[^\\\\/]+$");
   return function(result) {
     var html = '';
     var color = colors[result.Severity];
@@ -401,7 +402,7 @@ LogParser.GenerateResultRow = (function()
     if (typeof(result.File) != "undefined") {
       file = "<a href='texworks:" + encodeURI(result.File) +
              (result.Row ? '#' + result.Row : '') + "'>" +
-             getFilename.exec(result.File)[1] + "</a>";
+             getFilename.exec(result.File)[0] + "</a>";
     }
     html += '<tr>';
     html += '<td style="background-color: ' + color + '"></td>';
