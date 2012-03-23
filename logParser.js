@@ -2,7 +2,7 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
-// Version: 0.7.9
+// Version: 0.8.0
 // Date: 2012-03-23
 // Script-Type: hook
 // Hook: AfterTypeset
@@ -257,9 +257,9 @@ LogParser.MatchNewFile = (function()
       if (typeof(match[2]) != "undefined") {
         var basePath = match[2][0] == '.' ? getBasePath(rootFileName) : "";
         var m, svmatch = null, svoutput = null;
-        // TODO: we should count preceding characters in the same line, not simply
-        // consider max_print_line: filenames may start in the middle of a line.
-        // A (real) test case is needed!
+        // We ignore preceeding characters in the same line, and simply consider
+        // max_print_line: filenames which start in the middle of a line never
+        // continue on the next line.
         var len = getLengthInBytes(match[0]);
         while (m = fileContinuingRegexp.exec(output)) {
           var sepPos = output.indexOf(m[0]);
