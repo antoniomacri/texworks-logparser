@@ -2,7 +2,7 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
-// Version: 0.8.0
+// Version: 0.8.1
 // Date: 2012-03-23
 // Script-Type: hook
 // Hook: AfterTypeset
@@ -189,17 +189,21 @@ LogParser.prototype.Parse = function(output, rootFileName)
       output = output.slice(1);
     }
     else if (output.charAt(0) == "(") {
-      var result = LogParser.MatchNewFile(output, rootFileName);
-      if (result) {
-        fileStack.push(currentFile);
-        currentFile = result.File;
-        output = result.Output;
-        extraParens = 0;
-      }
-      else {
-        extraParens++;
-        output = output.slice(1);
-      }
+      var lookahead = null;
+      do {
+        var result = LogParser.MatchNewFile(output, rootFileName, lookahead);
+        if (result) {
+          fileStack.push(currentFile);
+          currentFile = result.File;
+          output = result.Output;
+          lookahead = result.Lookahead;
+          extraParens = 0;
+        }
+        else {
+          extraParens++;
+          output = output.slice(1);
+        }
+      } while (lookahead);
     }
 
     this.CheckForRerunOfLatex(output);
@@ -219,6 +223,7 @@ LogParser.MatchNewFile = (function()
   var fileRegexp = new RegExp('^\\("((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\|\\\\\\\\)(?:[^"]|\n)+)"|^\\(((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\|\\\\\\\\)[^ ()\n]+)');
   var fileContinuingRegexp = new RegExp('[/\\\\ ()\n]');
   var filenameRegexp = new RegExp("[^\\.]\\.[a-zA-Z0-9]{1,4}$");
+  var parenRegexp = new RegExp("\\((?:[^()]|\n)*\\)");
   function getBasePath(path) {
     var i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
     return (i == -1) ? path : path.slice(0, i+1);
@@ -249,9 +254,10 @@ LogParser.MatchNewFile = (function()
   // If we know for sure if the file exists, we return an appropriate result.
   // Otherwise we guess if it can be a valid filename, possibly spanning on multiple
   // lines, and remember such candidate when looking ahead for additional chunks.
-  return function (output,rootFileName) {
+  return function (output, rootFileName, match) {
     rootFileName = rootFileName || "";
-    var match = fileRegexp.exec(output);
+    match = match || fileRegexp.exec(output);
+    var lookahead = null;
     if (match) {
       output = output.slice(match[0].length);
       if (typeof(match[2]) != "undefined") {
@@ -266,9 +272,23 @@ LogParser.MatchNewFile = (function()
           var chunk = output.slice(0, sepPos);
           match[2] += chunk;
           len += getLengthInBytes(chunk);
-          if (m[0] == '(' || m[0] == ')') {
+          if (m[0] == ')') {
             output = output.slice(sepPos);
             break;
+          }
+          else if (m[0] == '(') {
+            output = output.slice(sepPos);
+            lookahead = fileRegexp.exec(output);
+            if (lookahead)
+              break;
+            m = parenRegexp.exec(output);
+            if (!m)
+              break;
+            output = output.slice(m[0].length);
+            var nolf = m[0].replace(/\n/g, '');
+            match[2] += nolf;
+            len += getLengthInBytes(nolf);
+            continue;
           }
           output = output.slice(sepPos + 1);
           var existence = TW.fileExists(basePath + match[2]);
@@ -306,7 +326,7 @@ LogParser.MatchNewFile = (function()
       else {
         match[1] = match[1].replace(/\n/g, '');
       }
-      return { Output: output, File: (match[1] || match[2])};
+      return { Output: output, File: (match[1] || match[2]), Lookahead: lookahead };
     }
     return null;
   };
