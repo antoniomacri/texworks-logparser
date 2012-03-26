@@ -335,10 +335,12 @@ LogParser.MatchNewFile = (function()
 
 LogParser.prototype.CheckForRerunOfLatex = (function()
 {
-  var latexmkApplyingRule = new RegExp("^Latexmk: applying rule \'(.*)\'");
   return function(output) {
-    if (latexmkApplyingRule.exec(output)) {
+    var val = output.indexOf('Latexmk: applying rule');
+    if(val > -1 && val < 7)
+    {
       this.Results = [];
+      showObject('Resetting results hsm edition');
     }
   };
 })();
