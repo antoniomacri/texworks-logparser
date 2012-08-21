@@ -323,7 +323,10 @@ LogParser.MatchNewFile = (function()
           else {
             if (existence == EXISTS)
               break;
-            if (existence == MAYEXIST && filenameRegexp.test(match[2])) {
+            if (existence == MAYEXIST && filenameRegexp.test(match[2]) &&
+                // It seems that after a file may only be a newline
+                // or a space followed by another file \( or a page \[
+                (m[0] == '\n' || m[0] == ' ' && /^\s*[([]/.test(output))) {
               svmatch = match[2];
               svoutput = output;
             }
