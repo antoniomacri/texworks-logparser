@@ -52,7 +52,7 @@ if(typeof(String.prototype.trimRight) == "undefined")
 }
 
 // Enums
-var Severity = { BadBox:0, Warning:1, Error:2 };
+var Severity = { BadBox:0, Warning:1, Error:2, Debug:3 };
 var SortBy = { Severity:0, Occurrence:1 };
 
 // Constructor
@@ -148,6 +148,13 @@ function LogParser()
       Regex: new RegExp("^(?:Under|Over)full \\\\[hv]box\\s*\\([^)]+\\) has occurred while \\\\output is active\n"),
       Callback: function(m, f) {
         return new Result(Severity.BadBox, f, 0, m[0].trimRight());
+      }
+    },
+    {
+      // \show and \showthe
+      Regex: new RegExp("^>\\s(.+(?:\\.|=macro:)\n(?:.*\n)*?l\\.(\\d+)\\s.*)\n"),
+      Callback: function(m, f) {
+        return new Result(Severity.Debug, f, m[2], m[1]);
       }
     },
     {
@@ -379,10 +386,10 @@ LogParser.prototype.WarnAuxFiles = function()
 LogParser.prototype.GenerateReport = function(onlyTable)
 {
   if (this.Results.length > 0) {
-    var counters = [ 0, 0, 0 ];
+    var counters = [ 0, 0, 0, 0 ];
     var html = "<table border='0' cellspacing='0' cellpadding='4'>";
     if (this.Settings.SortBy == SortBy.Severity) {
-      var htmls = [ "", "", "" ];
+      var htmls = [ "", "", "", "" ];
       for(var i = 0, len = this.Results.length; i < len; i++) {
         var result = this.Results[i];
         htmls[result.Severity] += LogParser.GenerateResultRow(result);
@@ -430,7 +437,7 @@ LogParser.EscapeHtml = function(str)
 
 LogParser.GenerateResultRow = (function()
 {
-  var colors = [ "#8080FF", "#F8F800", "#F80000" ];
+  var colors = [ "#8080FF", "#F8F800", "#F80000", "#00F800" ];
   var getFilename = new RegExp("[^\\\\/]+$");
   return function(result) {
     var html = '';
