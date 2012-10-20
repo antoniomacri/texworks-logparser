@@ -243,13 +243,15 @@ LogParser.prototype.Parse = function(output, rootFileName)
 LogParser.MatchNewFile = (function()
 {
   // Should catch filenames of the following forms:
-  //  * ./abc, "./abc"
   //  * /abc, "/abc"
+  //  * ./abc, "./abc"
   //  * .\abc, ".\abc"
-  //  * C:\abc, "C:\abc"
+  //  * ../abc, "../abc"
+  //  * ..\abc, "..\abc"
   //  * C:/abc, "C:/abc"
+  //  * C:\abc, "C:\abc"
   //  * \\server\abc, "\\server\abc"
-  var fileRegexp = new RegExp('^\\("((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\|[a-zA-Z]:/|\\\\\\\\)(?:[^"]|\n)+)"|^\\(((?:\\./|/|\\.\\\\|[a-zA-Z]:\\\\|[a-zA-Z]:/|\\\\\\\\)[^ ()\n]+)');
+  var fileRegexp = new RegExp('^\\("((?:[a-zA-Z]:[\\\\/]|/|\\.{1,2}[\\\\/]|\\\\\\\\)(?:[^"]|\n)+)"|^\\(((?:/|\\.{1,2}[\\\\/]|[a-zA-Z]:[\\\\/]|\\\\\\\\)[^ ()\n]+)');
   var fileContinuingRegexp = new RegExp('[/\\\\ ()\n]');
   var filenameRegexp = new RegExp("[^\\.]\\.[a-zA-Z0-9]{1,4}$");
   var parenRegexp = new RegExp("\\((?:[^()]|\n)*\\)");
