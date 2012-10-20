@@ -145,9 +145,9 @@ function LogParser()
     },
     {
       // This pattern recognizes badboxes without context and line numbers
-      Regex: new RegExp("^(?:Under|Over)full \\\\[hv]box\\s*\\([^)]+\\) has occurred while \\\\output is active\n"),
+      Regex: new RegExp("^(?:Under|Over)full \\\\[hv]box\\s*\\([^)]+\\) has occurred while \\\\output is active\\b"),
       Callback: function(m, f) {
-        return new Result(Severity.BadBox, f, 0, m[0].trimRight());
+        return new Result(Severity.BadBox, f, 0, m[0]);
       }
     },
     {
