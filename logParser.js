@@ -173,7 +173,7 @@ function LogParser()
     },
     {
       // \show and \showthe
-      Regex: new RegExp("^>\\s(.+(?:\\.|=(?:\\\\long\\s)?macro:)\n(?:.*\n)*?l\\.(\\d+)\\s.*)\n"),
+      Regex: new RegExp("^> (.+(?:\\.|=(?:\\\\long\\s)?macro:)\n(?:.*\n)*?l\\.(\\d+)\\s.*)\n"),
       Callback: function(m, f) {
         return new Result(Severity.Debug, f, m[2], m[1]);
       }
