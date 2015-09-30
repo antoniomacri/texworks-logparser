@@ -264,6 +264,7 @@ LogParser.prototype.Parse = function(output, rootFileName)
 LogParser.MatchNewFile = (function()
 {
   // Should catch filenames of the following forms:
+  //  * abc -- Encountered with MiKTeX. Currently, the algorithm only captures filenames with no parenthesis and that are not wrapped
   //  * /abc, "/abc"
   //  * ./abc, "./abc"
   //  * .\abc, ".\abc"
@@ -272,10 +273,14 @@ LogParser.MatchNewFile = (function()
   //  * C:/abc, "C:/abc"
   //  * C:\abc, "C:\abc"
   //  * \\server\abc, "\\server\abc"
-  var fileRegexp = new RegExp('^\\("((?:[a-zA-Z]:[\\\\/]|/|\\.{1,2}[\\\\/]|\\\\\\\\)(?:[^"]|\n)+)"|^\\(((?:/|\\.{1,2}[\\\\/]|[a-zA-Z]:[\\\\/]|\\\\\\\\)[^ ()\n]+)');
+  var fileRegexp = new RegExp('^\\("((?:[a-zA-Z]:[\\\\/]|/|\\.{1,2}[\\\\/]|\\\\\\\\)(?:[^"]|\n)+)"|^\\(((?:/|\\.{1,2}[\\\\/]|[a-zA-Z]:[\\\\/]|\\\\\\\\)[^ ()\n]+|[^ ()\n\r]+\\.[a-zA-Z0-9]{1,4}\\b)');
+  var absolutePathRegexp = new RegExp('^[a-zA-Z]:[\\\\/]|/|\\\\\\\\');
   var fileContinuingRegexp = new RegExp('[/\\\\ ()\n]');
   var filenameRegexp = new RegExp("[^\\.]\\.[a-zA-Z0-9]{1,4}$");
   var parenRegexp = new RegExp("\\((?:[^()]|\n)*\\)");
+  function isPathAbsolute(path) {
+    return absolutePathRegexp.exec(path);
+  }
   function getBasePath(path) {
     var i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
     return (i == -1) ? path : path.slice(0, i+1);
@@ -316,7 +321,7 @@ LogParser.MatchNewFile = (function()
     if (match) {
       output = output.slice(match[0].length);
       if (typeof(match[2]) != "undefined") {
-        var basePath = match[2][0] == '.' ? getBasePath(rootFileName) : "";
+        var basePath = isPathAbsolute(match[2]) ? "" : getBasePath(rootFileName);
         var m, svmatch = null, svoutput = null;
         // We ignore preceeding characters in the same line, and simply consider
         // max_print_line: filenames which start in the middle of a line never
@@ -334,11 +339,13 @@ LogParser.MatchNewFile = (function()
           else if (m[0] == '(') {
             output = output.slice(sepPos);
             lookahead = fileRegexp.exec(output);
-            if (lookahead)
+            if (lookahead) {
               break;
+            }
             m = parenRegexp.exec(output);
-            if (!m)
+            if (!m) {
               break;
+            }
             output = output.slice(m[0].length);
             var nolf = m[0].replace(/\n/g, '');
             match[2] += nolf;
@@ -348,8 +355,9 @@ LogParser.MatchNewFile = (function()
           output = output.slice(sepPos + 1);
           var existence = TW.fileExists(basePath + match[2]);
           if (m[0] == '/' || m[0] == '\\') {
-            if (existence == DOESNTEXIST)
+            if (existence == DOESNTEXIST) {
               return null;
+            }
           }
           else {
             if (existence == EXISTS)
@@ -357,7 +365,7 @@ LogParser.MatchNewFile = (function()
             if (existence == MAYEXIST && filenameRegexp.test(match[2]) &&
                 // It seems that after a file may only be a newline
                 // or a space followed by another file \( or a page \[
-                (m[0] == '\n' || m[0] == ' ' && /^\s*[([]/.test(output))) {
+                (m[0] == '\n' || m[0] == ' ' && /^\s*[([<]/.test(output))) {
               svmatch = match[2];
               svoutput = output;
             }
@@ -376,8 +384,9 @@ LogParser.MatchNewFile = (function()
               return null;
             }
             if (!filenameRegexp.test(match[2])) {
-              if (!svmatch)
+              if (!svmatch) {
                 return null;
+              }
               match[2] = svmatch;
               output = svoutput;
             }
@@ -486,7 +495,6 @@ LogParser.GenerateResultRow = (function()
     return html;
   };
 })();
-
 
 
 // We allow other scripts to use and reconfigure this parser
