@@ -367,8 +367,14 @@ LogParser.MatchNewFile = (function()
             len++;
           }
           else if (len % max_print_line) {
-            if (existence == DOESNTEXIST)
+            if (existence == DOESNTEXIST) {
+              if (filenameRegexp.test(match[2])) {
+                svmatch = match[2];
+                svoutput = output;
+                break;
+              }
               return null;
+            }
             if (!filenameRegexp.test(match[2])) {
               if (!svmatch)
                 return null;
