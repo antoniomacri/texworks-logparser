@@ -2,8 +2,8 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
-// Version: 0.8.6
-// Date: 2013-07-05
+// Version: 0.8.7
+// Date: 2015-09-30
 // Script-Type: hook
 // Hook: AfterTypeset
 
