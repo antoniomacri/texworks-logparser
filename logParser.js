@@ -2,8 +2,8 @@
 // Title: Errors, warnings, badboxes
 // Description: Looks for errors, warnings or badboxes in the LaTeX terminal output
 // Author: Jonathan Kew, Stefan Löffler, Antonio Macrì, Henrik Skov Midtiby
-// Version: 0.8.7
-// Date: 2015-09-30
+// Version: 0.8.8
+// Date: 2016-01-11
 // Script-Type: hook
 // Hook: AfterTypeset
 
@@ -176,6 +176,13 @@ function LogParser()
       Regex: new RegExp("^> (.+(?:\\.|=(?:\\\\long\\s)?macro:)\n(?:.*\n)*?l\\.(\\d+)\\s.*)\n"),
       Callback: function(m, f) {
         return new Result(Severity.Debug, f, m[2], m[1]);
+      }
+    },
+    {
+      // This pattern recognizes XeTeX \endL / \endR problems
+      Regex: new RegExp("^(\\\\endL or \\\\endR problem \\(\\d+ missing, \\d+ extra\\) in paragraph) at lines (\\d+)--\\d+\n"),
+      Callback: function(m, f) {
+        return new Result(Severity.Warning, f, m[2], m[1]);
       }
     },
     {
