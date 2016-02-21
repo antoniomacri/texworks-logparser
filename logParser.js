@@ -419,7 +419,7 @@ LogParser.prototype.WarnAuxFiles = function()
     if (this.Results[i].Description.indexOf("File ended while scanning use of") > -1) {
       if (TW.question(null, "", "While typesetting, a corrupt .aux " +
         "file from a previous run was detected. You should remove " +
-        "it and rerun the typesetting process. Do you want to display" +
+        "it and rerun the typesetting process. Do you want to display " +
         "the \"Remove Aux Files...\" dialog now?", 0x14000) == 0x4000)
         TW.target.removeAuxFiles();
       break;
