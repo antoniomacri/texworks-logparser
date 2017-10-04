@@ -113,7 +113,8 @@ function LogParser() {
       Regex: new RegExp("^(?:Class|Package|LaTeX) ([^\\s]+) Warning: (?:(?:\\(\\1\\)\\s.+)+|.+\n)*.*\\.\n"),
       Callback: function (m, f) {
         // We remove "\n(<name>) " from description:
-        var desc = m[0].replace(new RegExp("\\(" + RegExp.escape(m[1]) + "\\)\\s(.+)\n", "g"), " $1")
+        var desc = m[0].replace(new RegExp("^(.{0," + (max_print_line - 1) + "})$", "gm"), "$1 ")
+          .replace(new RegExp("\\(" + RegExp.escape(m[1]) + "\\)\\s(.+)\n", "g"), " $1")
           .replace(/\n/g, "").replace(/\s+/g, " ").trim();
         var row = /on input line (\d+)\./.exec(desc);
         return new Result(Severity.Warning, f, row ? row[1] : 0, desc);
