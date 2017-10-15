@@ -216,6 +216,7 @@ function LogParser() {
             if (result.Severity >= this.Settings.MinSeverity) {
               // Here we filter desired results
               this.Results.push(result);
+              typeof (onResultAdded) === "function" && onResultAdded(result);
             }
             // Always trimLeft before looking for a pattern
             output = output.slice(match[0].length).trimLeft();
@@ -235,6 +236,7 @@ function LogParser() {
         if (extraParens > 0)
           extraParens--;
         else if (fileStack.length > 0) {
+          typeof (onFileClosed) === "function" && onFileClosed(currentFile);
           currentFile = fileStack.pop();
         }
         output = output.slice(1);
@@ -246,6 +248,7 @@ function LogParser() {
           if (result) {
             fileStack.push(currentFile);
             currentFile = result.File;
+            typeof (onFileOpened) === "function" && onFileOpened(currentFile);
             output = result.Output;
             lookahead = result.Lookahead;
             extraParens = 0;
@@ -479,6 +482,21 @@ function LogParser() {
       return html;
     };
   })();
+
+
+  var onResultAdded, onFileOpened, onFileClosed;
+
+  this.setResultAddedCallback = function (callback) {
+    onResultAdded = callback;
+  };
+
+  this.setFileOpenedCallback = function (callback) {
+    onFileOpened = callback;
+  };
+
+  this.setFileClosedCallback = function (callback) {
+    onFileClosed = callback;
+  };
 
 
   function escapeHtml(str) {
