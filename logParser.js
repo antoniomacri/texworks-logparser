@@ -279,7 +279,7 @@ function LogParser() {
     var fileRegexp = new RegExp('^\\("((?:[a-zA-Z]:[\\\\/]|/|\\.{1,2}[\\\\/]|\\\\\\\\)(?:[^"]|\n)+)"|^\\(((?:/|\\.{1,2}[\\\\/]|[a-zA-Z]:[\\\\/]|\\\\\\\\)[^ ()\n]+|[^ ()\n\r]+\\.[a-zA-Z0-9]{1,4}\\b)');
     var absolutePathRegexp = new RegExp('^[a-zA-Z]:[\\\\/]|/|\\\\\\\\');
     var fileContinuingRegexp = new RegExp('[/\\\\ ()\n]');
-    var filenameRegexp = new RegExp("[^\\.]\\.[a-zA-Z0-9]{1,4}$");
+    var fileExtensionRegexp = new RegExp("[^\\.]\\.[a-zA-Z0-9]{1,4}$");
     var parenRegexp = new RegExp("\\((?:[^()]|\n)*\\)");
     function isPathAbsolute(path) {
       return absolutePathRegexp.exec(path);
@@ -365,7 +365,7 @@ function LogParser() {
             else {
               if (existence == EXISTS)
                 break;
-              if (existence == MAYEXIST && filenameRegexp.test(match[2]) &&
+              if (existence == MAYEXIST && fileExtensionRegexp.test(match[2]) &&
                 // It seems that after a file may only be a newline
                 // or a space followed by another file \( or a page \[
                 (m[0] == '\n' || m[0] == ' ' && /^\s*[([<]/.test(output))) {
@@ -379,14 +379,14 @@ function LogParser() {
             }
             else if (len % max_print_line) {
               if (existence == DOESNTEXIST) {
-                if (filenameRegexp.test(match[2])) {
+                if (fileExtensionRegexp.test(match[2])) {
                   svmatch = match[2];
                   svoutput = output;
                   break;
                 }
                 return null;
               }
-              if (!filenameRegexp.test(match[2])) {
+              if (!fileExtensionRegexp.test(match[2])) {
                 if (!svmatch) {
                   return null;
                 }
