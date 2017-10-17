@@ -326,7 +326,7 @@ function LogParser() {
         if (typeof (match[2]) != "undefined") {
           var basePath = isPathAbsolute(match[2]) ? "" : getBasePath(rootFileName);
           var m, svmatch = null, svoutput = null;
-          // We ignore preceeding characters in the same line, and simply consider
+          // We ignore preceding characters in the same line, and simply consider
           // max_print_line: filenames which start in the middle of a line never
           // continue on the next line.
           var len = getLengthInBytes(match[0]);
