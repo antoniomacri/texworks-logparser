@@ -1,5 +1,5 @@
 // TeXworksScript
-// Title: Log parser tests
+// Title: Run log parser tests
 // Author: Antonio Macrì
 // Version: 1.0
 // Date: 2012-03-07
