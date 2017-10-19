@@ -26,14 +26,13 @@
 justLoad = null;
 
 
-function GenerateResultDiff(expected, unexpected)
-{
+function GenerateResultDiff(expected, unexpected) {
   var s = "";
   s += "<table border='0' cellspacing='0' cellpadding='4'>";
   s += "<tr><td></td><td colspan='3'>Expected:</td></tr>";
   var k = 0;
-  for (var i=0; i < expected.length; i++) {
-    for (var j=k; j < unexpected.length; j++) {
+  for (var i = 0; i < expected.length; i++) {
+    for (var j = k; j < unexpected.length; j++) {
       if (Result.Equals(expected[i], unexpected[j])) {
         var tmp = unexpected[k];
         unexpected[k] = unexpected[j];
@@ -48,7 +47,7 @@ function GenerateResultDiff(expected, unexpected)
   }
   if (k < unexpected.length) {
     s += "<tr><td></td><td colspan='3'>Unexpected:</td></tr>";
-    for (; k<unexpected.length; k++) {
+    for (; k < unexpected.length; k++) {
       s += LogParser.GenerateResultRow(unexpected[k]);
     }
   }
@@ -69,10 +68,10 @@ if (file.status == 0) {
   var failedTests = 0;
 
   var fex = [];
-  fex[0] = function(){ return 2; };
-  fex[1] = function(f) {
-    var result = files.some(function(ff) {
-      return f == ff || ff.slice(0,f.length) == f && (ff[f.length]=='\\'||ff[f.length]=='/');
+  fex[0] = function () { return 2; };
+  fex[1] = function (f) {
+    var result = files.some(function (ff) {
+      return f == ff || ff.slice(0, f.length) == f && (ff[f.length] == '\\' || ff[f.length] == '/');
     }) ? 0 : 1;
     return result;
   };
@@ -81,7 +80,7 @@ if (file.status == 0) {
     this.Expected = expected;
     this.Generated = generated;
     var passed = expected.length == generated.length;
-    for (var k=0; k<expected.length && passed; k++) {
+    for (var k = 0; k < expected.length && passed; k++) {
       passed = Result.Equals(expected[k], generated[k]);
     }
     this.Passed = passed;
@@ -132,7 +131,7 @@ if (file.status == 0) {
             if (iFirst == i - 1) {
               s += "<td valign='top' colspan='2'>" + folder + "/" + iFirst + ".test</td>";
             } else {
-              s += "<td valign='top' colspan='2'>" + folder + "/" + iFirst + "..." + (i-1) + ".test</td>";
+              s += "<td valign='top' colspan='2'>" + folder + "/" + iFirst + "..." + (i - 1) + ".test</td>";
             }
             s += "</tr>";
           }
@@ -148,7 +147,7 @@ if (file.status == 0) {
           }
           s += "<tr>";
           s += "<td style='background-color: red'></td>";
-          s += "<td valign='top'>" + folder + "/" + i + "[" + j +  "].test</td>";
+          s += "<td valign='top'>" + folder + "/" + i + "[" + j + "].test</td>";
           s += "<td valign='top'><font size=-2>" + GenerateResultDiff(testResult.Expected, testResult.Generated) + "</font></td>";
           s += "</tr>";
           iFirst = i + 1;
@@ -162,7 +161,7 @@ if (file.status == 0) {
       if (iFirst == testResults.length - 1) {
         s += "<td valign='top' colspan='2'>" + folder + "/" + iFirst + ".test</td>";
       } else {
-        s += "<td valign='top' colspan='2'>" + folder + "/" + iFirst + "..." + (testResults.length-1) + ".test</td>";
+        s += "<td valign='top' colspan='2'>" + folder + "/" + iFirst + "..." + (testResults.length - 1) + ".test</td>";
       }
       s += "</tr>";
     }
@@ -171,7 +170,7 @@ if (file.status == 0) {
 
   var s = "";
 
-  var folders = [ "tests-miktex", "tests-texlive-ubuntu" ];
+  var folders = ["tests-miktex", "tests-texlive-ubuntu"];
   for (var j = 0; j < folders.length; j++) {
     var files = TW.readFile(folders[j] + "/files.js");
     if (files.status == 0) {
@@ -186,7 +185,7 @@ if (file.status == 0) {
 
   var html = "<html><body>";
   html += "Total tests: " + totalTests +
-          ", Failed tests: " + failedTests + "<hr/>";
+    ", Failed tests: " + failedTests + "<hr/>";
   html += "<table border='0' cellspacing='0' cellpadding='4'>";
   html += s;
   html += "</table></body></html>";
