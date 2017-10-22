@@ -65,7 +65,8 @@ Result.Equals = function (a, b) {
     a.Row == b.Row && a.Description == b.Description;
 }
 
-// Constructor
+
+// Main class
 function LogParser() {
   var that = this;
 
@@ -190,306 +191,307 @@ function LogParser() {
     SortBy: SortBy.Severity,
     MinSeverity: Severity.BadBox
   };
-}
 
 
-LogParser.prototype.Parse = function (output, rootFileName) {
-  var skipRegexp = new RegExp("^[^\n\r()]+");
-  var currentFile = undefined, fileStack = [], extraParens = 0;
+  this.Parse = function (output, rootFileName) {
+    var skipRegexp = new RegExp("^[^\n\r()]+");
+    var currentFile = undefined, fileStack = [], extraParens = 0;
 
-  // Generate or clear old results
-  this.Results = [];
+    // Generate or clear old results
+    this.Results = [];
 
-  while (output.length > 0) {
-    // Be sure to remove any whitespace at the beginning of the string
-    output = output.trimLeft();
+    while (output.length > 0) {
+      // Be sure to remove any whitespace at the beginning of the string
+      output = output.trimLeft();
 
-    // Text matched by some patterns (especially badboxes) may contain
-    // unbalanced parenthesis: we'd better look for every pattern, to
-    // gobble such text and avoid those parenthesis conflict with the
-    // file stack.
-    for (var i = 0, len = this.Patterns.length; i < len;) {
-      var match = this.Patterns[i].Regex.exec(output);
-      if (match) {
-        var result = this.Patterns[i].Callback(match, currentFile);
-        if (result) {
-          if (result.Severity >= this.Settings.MinSeverity) {
-            // Here we filter desired results
-            this.Results.push(result);
-          }
-          // Always trimLeft before looking for a pattern
-          output = output.slice(match[0].length).trimLeft();
-          i = 0;
-          continue;
-        }
-      }
-      i++;
-    }
-
-    // Go to the first parenthesis or simply skip the first line
-    var match = skipRegexp.exec(output);
-    if (match) {
-      output = output.slice(match[0].length);
-    }
-    if (output.charAt(0) == ")") {
-      if (extraParens > 0)
-        extraParens--;
-      else if (fileStack.length > 0)
-        currentFile = fileStack.pop();
-      output = output.slice(1);
-    }
-    else if (output.charAt(0) == "(") {
-      var lookahead = null;
-      do {
-        var result = this.MatchNewFile(output, rootFileName, lookahead);
-        if (result) {
-          fileStack.push(currentFile);
-          currentFile = result.File;
-          output = result.Output;
-          lookahead = result.Lookahead;
-          extraParens = 0;
-        }
-        else {
-          extraParens++;
-          output = output.slice(1);
-        }
-      } while (lookahead);
-    }
-  }
-
-  this.WarnAuxFiles();
-}
-
-
-LogParser.prototype.MatchNewFile = (function () {
-  // Should catch filenames of the following forms:
-  //  * abc -- Encountered with MiKTeX. Currently, the algorithm only captures filenames with no parenthesis and that are not wrapped
-  //  * /abc, "/abc"
-  //  * ./abc, "./abc"
-  //  * .\abc, ".\abc"
-  //  * ../abc, "../abc"
-  //  * ..\abc, "..\abc"
-  //  * C:/abc, "C:/abc"
-  //  * C:\abc, "C:\abc"
-  //  * \\server\abc, "\\server\abc"
-  var fileRegexp = new RegExp('^\\("((?:[a-zA-Z]:[\\\\/]|/|\\.{1,2}[\\\\/]|\\\\\\\\)(?:[^"]|\n)+)"|^\\(((?:/|\\.{1,2}[\\\\/]|[a-zA-Z]:[\\\\/]|\\\\\\\\)[^ ()\n]+|[^ ()\n\r]+\\.[a-zA-Z0-9]{1,4}\\b)');
-  var absolutePathRegexp = new RegExp('^[a-zA-Z]:[\\\\/]|/|\\\\\\\\');
-  var fileContinuingRegexp = new RegExp('[/\\\\ ()\n]');
-  var filenameRegexp = new RegExp("[^\\.]\\.[a-zA-Z0-9]{1,4}$");
-  var parenRegexp = new RegExp("\\((?:[^()]|\n)*\\)");
-  function isPathAbsolute(path) {
-    return absolutePathRegexp.exec(path);
-  }
-  function getBasePath(path) {
-    var i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-    return (i == -1) ? path : path.slice(0, i + 1);
-  }
-  // Non-ASCII chars occupy more than one byte: the compiler
-  // breaks after 79 *bytes*, not chars!
-  function getLengthInBytes(s) {
-    var r = s.length;
-    for (var k = 0, l = r; k < l; k++) {
-      if (s.charCodeAt(k) <= 0x7F) continue;
-      else if (s.charCodeAt(k) <= 0x7FF) r += 1;
-      else if (s.charCodeAt(k) <= 0xFFFF) r += 2;
-      else r += 3;
-    }
-    return r;
-  }
-  const EXISTS = 0;
-  const MAYEXIST = 2;
-  const DOESNTEXIST = 1;
-  if (typeof (TW.fileExists) == "undefined") {
-    TW.fileExists = function () { return MAYEXIST; };
-  }
-  // The algorithm works as follows.
-  // If the path starts with a quote ("), we are on MiKTeX and the path contains spaces.
-  // We just have to read until the next \".
-  // Otherwise, we use a double approach: first, we rely on TW.fileExists; second, we
-  // check the length of the line. TW.fileExists can return the actual response (EXISTS,
-  // DOESNTEXIST) or not (MAYEXIST). Counting the length of the line can be useful to
-  // recognize files on multiple lines: a file can continue on the next line only if
-  // has been reached the end of the current line.
-  // If we know for sure if the file exists, we return an appropriate result.
-  // Otherwise we guess if it can be a valid filename, possibly spanning on multiple
-  // lines, and remember such candidate when looking ahead for additional chunks.
-  return function (output, rootFileName, match) {
-    rootFileName = rootFileName || "";
-    match = match || fileRegexp.exec(output);
-    var lookahead = null;
-    if (match) {
-      output = output.slice(match[0].length);
-      if (typeof (match[2]) != "undefined") {
-        var basePath = isPathAbsolute(match[2]) ? "" : getBasePath(rootFileName);
-        var m, svmatch = null, svoutput = null;
-        // We ignore preceeding characters in the same line, and simply consider
-        // max_print_line: filenames which start in the middle of a line never
-        // continue on the next line.
-        var len = getLengthInBytes(match[0]);
-        while (m = fileContinuingRegexp.exec(output)) {
-          var sepPos = output.indexOf(m[0]);
-          var chunk = output.slice(0, sepPos);
-          match[2] += chunk;
-          len += getLengthInBytes(chunk);
-          if (m[0] == ')') {
-            output = output.slice(sepPos);
-            break;
-          }
-          else if (m[0] == '(') {
-            output = output.slice(sepPos);
-            lookahead = fileRegexp.exec(output);
-            if (lookahead) {
-              break;
+      // Text matched by some patterns (especially badboxes) may contain
+      // unbalanced parenthesis: we'd better look for every pattern, to
+      // gobble such text and avoid those parenthesis conflict with the
+      // file stack.
+      for (var i = 0, len = this.Patterns.length; i < len;) {
+        var match = this.Patterns[i].Regex.exec(output);
+        if (match) {
+          var result = this.Patterns[i].Callback(match, currentFile);
+          if (result) {
+            if (result.Severity >= this.Settings.MinSeverity) {
+              // Here we filter desired results
+              this.Results.push(result);
             }
-            m = parenRegexp.exec(output);
-            if (!m) {
-              break;
-            }
-            output = output.slice(m[0].length);
-            var nolf = m[0].replace(/\n/g, '');
-            match[2] += nolf;
-            len += getLengthInBytes(nolf);
+            // Always trimLeft before looking for a pattern
+            output = output.slice(match[0].length).trimLeft();
+            i = 0;
             continue;
           }
-          output = output.slice(sepPos + 1);
-          var existence = TW.fileExists(basePath + match[2]);
-          if (m[0] == '/' || m[0] == '\\') {
-            if (existence == DOESNTEXIST) {
-              return null;
-            }
+        }
+        i++;
+      }
+
+      // Go to the first parenthesis or simply skip the first line
+      var match = skipRegexp.exec(output);
+      if (match) {
+        output = output.slice(match[0].length);
+      }
+      if (output.charAt(0) == ")") {
+        if (extraParens > 0)
+          extraParens--;
+        else if (fileStack.length > 0) {
+          currentFile = fileStack.pop();
+        }
+        output = output.slice(1);
+      }
+      else if (output.charAt(0) == "(") {
+        var lookahead = null;
+        do {
+          var result = this.MatchNewFile(output, rootFileName, lookahead);
+          if (result) {
+            fileStack.push(currentFile);
+            currentFile = result.File;
+            output = result.Output;
+            lookahead = result.Lookahead;
+            extraParens = 0;
           }
           else {
-            if (existence == EXISTS)
+            extraParens++;
+            output = output.slice(1);
+          }
+        } while (lookahead);
+      }
+    }
+
+    this.WarnAuxFiles();
+  }
+
+
+  this.MatchNewFile = (function () {
+    // Should catch filenames of the following forms:
+    //  * abc -- Encountered with MiKTeX. Currently, the algorithm only captures filenames with no parenthesis and that are not wrapped
+    //  * /abc, "/abc"
+    //  * ./abc, "./abc"
+    //  * .\abc, ".\abc"
+    //  * ../abc, "../abc"
+    //  * ..\abc, "..\abc"
+    //  * C:/abc, "C:/abc"
+    //  * C:\abc, "C:\abc"
+    //  * \\server\abc, "\\server\abc"
+    var fileRegexp = new RegExp('^\\("((?:[a-zA-Z]:[\\\\/]|/|\\.{1,2}[\\\\/]|\\\\\\\\)(?:[^"]|\n)+)"|^\\(((?:/|\\.{1,2}[\\\\/]|[a-zA-Z]:[\\\\/]|\\\\\\\\)[^ ()\n]+|[^ ()\n\r]+\\.[a-zA-Z0-9]{1,4}\\b)');
+    var absolutePathRegexp = new RegExp('^[a-zA-Z]:[\\\\/]|/|\\\\\\\\');
+    var fileContinuingRegexp = new RegExp('[/\\\\ ()\n]');
+    var filenameRegexp = new RegExp("[^\\.]\\.[a-zA-Z0-9]{1,4}$");
+    var parenRegexp = new RegExp("\\((?:[^()]|\n)*\\)");
+    function isPathAbsolute(path) {
+      return absolutePathRegexp.exec(path);
+    }
+    function getBasePath(path) {
+      var i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+      return (i == -1) ? path : path.slice(0, i + 1);
+    }
+    // Non-ASCII chars occupy more than one byte: the compiler
+    // breaks after 79 *bytes*, not chars!
+    function getLengthInBytes(s) {
+      var r = s.length;
+      for (var k = 0, l = r; k < l; k++) {
+        if (s.charCodeAt(k) <= 0x7F) continue;
+        else if (s.charCodeAt(k) <= 0x7FF) r += 1;
+        else if (s.charCodeAt(k) <= 0xFFFF) r += 2;
+        else r += 3;
+      }
+      return r;
+    }
+    const EXISTS = 0;
+    const MAYEXIST = 2;
+    const DOESNTEXIST = 1;
+    if (typeof (TW.fileExists) == "undefined") {
+      TW.fileExists = function () { return MAYEXIST; };
+    }
+    // The algorithm works as follows.
+    // If the path starts with a quote ("), we are on MiKTeX and the path contains spaces.
+    // We just have to read until the next \".
+    // Otherwise, we use a double approach: first, we rely on TW.fileExists; second, we
+    // check the length of the line. TW.fileExists can return the actual response (EXISTS,
+    // DOESNTEXIST) or not (MAYEXIST). Counting the length of the line can be useful to
+    // recognize files on multiple lines: a file can continue on the next line only if
+    // has been reached the end of the current line.
+    // If we know for sure if the file exists, we return an appropriate result.
+    // Otherwise we guess if it can be a valid filename, possibly spanning on multiple
+    // lines, and remember such candidate when looking ahead for additional chunks.
+    return function (output, rootFileName, match) {
+      rootFileName = rootFileName || "";
+      match = match || fileRegexp.exec(output);
+      var lookahead = null;
+      if (match) {
+        output = output.slice(match[0].length);
+        if (typeof (match[2]) != "undefined") {
+          var basePath = isPathAbsolute(match[2]) ? "" : getBasePath(rootFileName);
+          var m, svmatch = null, svoutput = null;
+          // We ignore preceeding characters in the same line, and simply consider
+          // max_print_line: filenames which start in the middle of a line never
+          // continue on the next line.
+          var len = getLengthInBytes(match[0]);
+          while (m = fileContinuingRegexp.exec(output)) {
+            var sepPos = output.indexOf(m[0]);
+            var chunk = output.slice(0, sepPos);
+            match[2] += chunk;
+            len += getLengthInBytes(chunk);
+            if (m[0] == ')') {
+              output = output.slice(sepPos);
               break;
-            if (existence == MAYEXIST && filenameRegexp.test(match[2]) &&
-              // It seems that after a file may only be a newline
-              // or a space followed by another file \( or a page \[
-              (m[0] == '\n' || m[0] == ' ' && /^\s*[([<]/.test(output))) {
-              svmatch = match[2];
-              svoutput = output;
             }
-          }
-          if (m[0] != '\n') {
-            match[2] += m[0];
-            len++;
-          }
-          else if (len % max_print_line) {
-            if (existence == DOESNTEXIST) {
-              if (filenameRegexp.test(match[2])) {
-                svmatch = match[2];
-                svoutput = output;
+            else if (m[0] == '(') {
+              output = output.slice(sepPos);
+              lookahead = fileRegexp.exec(output);
+              if (lookahead) {
                 break;
               }
-              return null;
+              m = parenRegexp.exec(output);
+              if (!m) {
+                break;
+              }
+              output = output.slice(m[0].length);
+              var nolf = m[0].replace(/\n/g, '');
+              match[2] += nolf;
+              len += getLengthInBytes(nolf);
+              continue;
             }
-            if (!filenameRegexp.test(match[2])) {
-              if (!svmatch) {
+            output = output.slice(sepPos + 1);
+            var existence = TW.fileExists(basePath + match[2]);
+            if (m[0] == '/' || m[0] == '\\') {
+              if (existence == DOESNTEXIST) {
                 return null;
               }
-              match[2] = svmatch;
-              output = svoutput;
             }
-            break;
+            else {
+              if (existence == EXISTS)
+                break;
+              if (existence == MAYEXIST && filenameRegexp.test(match[2]) &&
+                // It seems that after a file may only be a newline
+                // or a space followed by another file \( or a page \[
+                (m[0] == '\n' || m[0] == ' ' && /^\s*[([<]/.test(output))) {
+                svmatch = match[2];
+                svoutput = output;
+              }
+            }
+            if (m[0] != '\n') {
+              match[2] += m[0];
+              len++;
+            }
+            else if (len % max_print_line) {
+              if (existence == DOESNTEXIST) {
+                if (filenameRegexp.test(match[2])) {
+                  svmatch = match[2];
+                  svoutput = output;
+                  break;
+                }
+                return null;
+              }
+              if (!filenameRegexp.test(match[2])) {
+                if (!svmatch) {
+                  return null;
+                }
+                match[2] = svmatch;
+                output = svoutput;
+              }
+              break;
+            }
           }
+          // trimRight to remove possible spaces before an opening parenthesis
+          match[2] = match[2].trimRight();
         }
-        // trimRight to remove possible spaces before an opening parenthesis
-        match[2] = match[2].trimRight();
+        else {
+          match[1] = match[1].replace(/\n/g, '');
+        }
+        return { Output: output, File: (match[1] || match[2]), Lookahead: lookahead };
+      }
+      return null;
+    };
+  })();
+
+
+  this.WarnAuxFiles = function () {
+    for (var i = this.Results.length - 1; i >= 0; i--) {
+      if (this.Results[i].Description.indexOf("File ended while scanning use of") > -1) {
+        if (TW.question(null, "", "While typesetting, a corrupt .aux " +
+          "file from a previous run was detected. You should remove " +
+          "it and rerun the typesetting process. Do you want to display " +
+          "the \"Remove Aux Files...\" dialog now?", 0x14000) == 0x4000)
+          TW.target.removeAuxFiles();
+        break;
+      }
+    }
+  }
+
+
+  this.GenerateReport = function (onlyTable) {
+    if (this.Results.length > 0) {
+      var counters = [0, 0, 0, 0];
+      var html = "<table border='0' cellspacing='0' cellpadding='4'>";
+      if (this.Settings.SortBy == SortBy.Severity) {
+        var htmls = ["", "", "", ""];
+        for (var i = 0, len = this.Results.length; i < len; i++) {
+          var result = this.Results[i];
+          htmls[result.Severity] += this.GenerateResultRow(result);
+          counters[result.Severity]++;
+        }
+        html += htmls.reverse().join("");
       }
       else {
-        match[1] = match[1].replace(/\n/g, '');
+        for (var i = 0, len = this.Results.length; i < len; i++) {
+          var result = this.Results[i];
+          html += this.GenerateResultRow(result);
+          counters[result.Severity]++;
+        }
       }
-      return { Output: output, File: (match[1] || match[2]), Lookahead: lookahead };
-    }
-    return null;
-  };
-})();
-
-
-LogParser.prototype.WarnAuxFiles = function () {
-  for (var i = this.Results.length - 1; i >= 0; i--) {
-    if (this.Results[i].Description.indexOf("File ended while scanning use of") > -1) {
-      if (TW.question(null, "", "While typesetting, a corrupt .aux " +
-        "file from a previous run was detected. You should remove " +
-        "it and rerun the typesetting process. Do you want to display " +
-        "the \"Remove Aux Files...\" dialog now?", 0x14000) == 0x4000)
-        TW.target.removeAuxFiles();
-      break;
-    }
-  }
-}
-
-
-LogParser.prototype.GenerateReport = function (onlyTable) {
-  if (this.Results.length > 0) {
-    var counters = [0, 0, 0, 0];
-    var html = "<table border='0' cellspacing='0' cellpadding='4'>";
-    if (this.Settings.SortBy == SortBy.Severity) {
-      var htmls = ["", "", "", ""];
-      for (var i = 0, len = this.Results.length; i < len; i++) {
-        var result = this.Results[i];
-        htmls[result.Severity] += this.GenerateResultRow(result);
-        counters[result.Severity]++;
+      html += "</table>";
+      if (!onlyTable) {
+        var h = "<html><body>";
+        h += "Errors: " + counters[Severity.Error] +
+          ", Warnings: " + counters[Severity.Warning] +
+          ", Bad boxes: " + counters[Severity.BadBox] + "<hr/>";
+        h += html;
+        h += "</body></html>";
+        html = h;
       }
-      html += htmls.reverse().join("");
+      return html;
     }
     else {
-      for (var i = 0, len = this.Results.length; i < len; i++) {
-        var result = this.Results[i];
-        html += this.GenerateResultRow(result);
-        counters[result.Severity]++;
+      return null;
+    }
+  }
+
+
+  this.GenerateResultRow = (function () {
+    var colors = ["#8080FF", "#F8F800", "#F80000", "#00F800"];
+    var getFilename = new RegExp("[^\\\\/]+$");
+    return function (result) {
+      var html = '';
+      var color = colors[result.Severity];
+      var file = "&#8212;";
+      if (typeof (result.File) != "undefined") {
+        file = "<a href='texworks:" + encodeURI(result.File) +
+          (result.Row ? '#' + result.Row : '') + "'>" +
+          getFilename.exec(result.File)[0] + "</a>";
       }
-    }
-    html += "</table>";
-    if (!onlyTable) {
-      var h = "<html><body>";
-      h += "Errors: " + counters[Severity.Error] +
-        ", Warnings: " + counters[Severity.Warning] +
-        ", Bad boxes: " + counters[Severity.BadBox] + "<hr/>";
-      h += html;
-      h += "</body></html>";
-      html = h;
-    }
-    return html;
-  }
-  else {
-    return null;
+      html += '<tr>';
+      html += '<td style="background-color: ' + color + '"></td>';
+      html += '<td valign="top">' + file + '</td>';
+      html += '<td valign="top">' + (result.Row || '') + '</td>';
+      html += '<td valign="top">' + escapeHtml(result.Description) + '</td>';
+      html += '</tr>';
+      return html;
+    };
+  })();
+
+
+  function escapeHtml(str) {
+    var html = str;
+    html = html.replace(/&/g, "&amp;");
+    html = html.replace(/</g, "&lt;");
+    html = html.replace(/>/g, "&gt;");
+    html = html.replace(/\n /g, "\n&nbsp;");
+    html = html.replace(/  /g, "&nbsp;&nbsp;");
+    html = html.replace(/&nbsp; /g, "&nbsp;&nbsp;");
+    return html.replace(/\n/g, "<br />\n");
   }
 }
-
-
-LogParser.prototype.EscapeHtml = function (str) {
-  var html = str;
-  html = html.replace(/&/g, "&amp;");
-  html = html.replace(/</g, "&lt;");
-  html = html.replace(/>/g, "&gt;");
-  html = html.replace(/\n /g, "\n&nbsp;");
-  html = html.replace(/  /g, "&nbsp;&nbsp;");
-  html = html.replace(/&nbsp; /g, "&nbsp;&nbsp;");
-  return html.replace(/\n/g, "<br />\n");
-}
-
-
-LogParser.prototype.GenerateResultRow = (function () {
-  var colors = ["#8080FF", "#F8F800", "#F80000", "#00F800"];
-  var getFilename = new RegExp("[^\\\\/]+$");
-  return function (result) {
-    var html = '';
-    var color = colors[result.Severity];
-    var file = "&#8212;";
-    if (typeof (result.File) != "undefined") {
-      file = "<a href='texworks:" + encodeURI(result.File) +
-        (result.Row ? '#' + result.Row : '') + "'>" +
-        getFilename.exec(result.File)[0] + "</a>";
-    }
-    html += '<tr>';
-    html += '<td style="background-color: ' + color + '"></td>';
-    html += '<td valign="top">' + file + '</td>';
-    html += '<td valign="top">' + (result.Row || '') + '</td>';
-    html += '<td valign="top">' + this.EscapeHtml(result.Description) + '</td>';
-    html += '</tr>';
-    return html;
-  };
-})();
 
 
 // We allow other scripts to use and reconfigure this parser
