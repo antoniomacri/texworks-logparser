@@ -169,7 +169,7 @@ if (file.status == 0) {
 
   var s = "";
 
-  var folders = ["tests-miktex", "tests-texlive-ubuntu"];
+  var folders = ["tests-miktex", "tests-texlive-ubuntu", "tests-texlive-windows"];
   for (var j = 0; j < folders.length; j++) {
     var files = TW.readFile(folders[j] + "/files.js");
     if (files.status == 0) {

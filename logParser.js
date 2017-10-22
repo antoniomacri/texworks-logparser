@@ -48,6 +48,13 @@ if (typeof (String.prototype.trimRight) == "undefined") {
   })();
 }
 
+if (typeof (RegExp.escape) == "undefined") {
+  RegExp.escape = function (s) {
+    return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+  };
+}
+
+
 // Enums
 var Severity = { BadBox: 0, Warning: 1, Error: 2, Debug: 3 };
 var SortBy = { Severity: 0, Occurrence: 1 };
@@ -106,7 +113,7 @@ function LogParser() {
       Regex: new RegExp("^(?:Class|Package|LaTeX) ([^\\s]+) Warning: (?:(?:\\(\\1\\)\\s.+)+|.+\n)*.*\\.\n"),
       Callback: function (m, f) {
         // We remove "\n(<name>) " from description:
-        var desc = m[0].replace(new RegExp("\\(" + m[1] + "\\)\\s(.+)\n", "g"), " $1")
+        var desc = m[0].replace(new RegExp("\\(" + RegExp.escape(m[1]) + "\\)\\s(.+)\n", "g"), " $1")
           .replace(/\n/g, "").replace(/\s+/g, " ").trim();
         var row = /on input line (\d+)\./.exec(desc);
         return new Result(Severity.Warning, f, row ? row[1] : 0, desc);
