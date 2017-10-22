@@ -241,7 +241,7 @@ LogParser.prototype.Parse = function (output, rootFileName) {
     else if (output.charAt(0) == "(") {
       var lookahead = null;
       do {
-        var result = LogParser.MatchNewFile(output, rootFileName, lookahead);
+        var result = this.MatchNewFile(output, rootFileName, lookahead);
         if (result) {
           fileStack.push(currentFile);
           currentFile = result.File;
@@ -261,7 +261,7 @@ LogParser.prototype.Parse = function (output, rootFileName) {
 }
 
 
-LogParser.MatchNewFile = (function () {
+LogParser.prototype.MatchNewFile = (function () {
   // Should catch filenames of the following forms:
   //  * abc -- Encountered with MiKTeX. Currently, the algorithm only captures filenames with no parenthesis and that are not wrapped
   //  * /abc, "/abc"
@@ -427,7 +427,7 @@ LogParser.prototype.GenerateReport = function (onlyTable) {
       var htmls = ["", "", "", ""];
       for (var i = 0, len = this.Results.length; i < len; i++) {
         var result = this.Results[i];
-        htmls[result.Severity] += LogParser.GenerateResultRow(result);
+        htmls[result.Severity] += this.GenerateResultRow(result);
         counters[result.Severity]++;
       }
       html += htmls.reverse().join("");
@@ -435,7 +435,7 @@ LogParser.prototype.GenerateReport = function (onlyTable) {
     else {
       for (var i = 0, len = this.Results.length; i < len; i++) {
         var result = this.Results[i];
-        html += LogParser.GenerateResultRow(result);
+        html += this.GenerateResultRow(result);
         counters[result.Severity]++;
       }
     }
@@ -457,7 +457,7 @@ LogParser.prototype.GenerateReport = function (onlyTable) {
 }
 
 
-LogParser.EscapeHtml = function (str) {
+LogParser.prototype.EscapeHtml = function (str) {
   var html = str;
   html = html.replace(/&/g, "&amp;");
   html = html.replace(/</g, "&lt;");
@@ -469,7 +469,7 @@ LogParser.EscapeHtml = function (str) {
 }
 
 
-LogParser.GenerateResultRow = (function () {
+LogParser.prototype.GenerateResultRow = (function () {
   var colors = ["#8080FF", "#F8F800", "#F80000", "#00F800"];
   var getFilename = new RegExp("[^\\\\/]+$");
   return function (result) {
@@ -485,7 +485,7 @@ LogParser.GenerateResultRow = (function () {
     html += '<td style="background-color: ' + color + '"></td>';
     html += '<td valign="top">' + file + '</td>';
     html += '<td valign="top">' + (result.Row || '') + '</td>';
-    html += '<td valign="top">' + LogParser.EscapeHtml(result.Description) + '</td>';
+    html += '<td valign="top">' + this.EscapeHtml(result.Description) + '</td>';
     html += '</tr>';
     return html;
   };

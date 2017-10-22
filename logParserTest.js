@@ -26,36 +26,6 @@
 justLoad = null;
 
 
-function GenerateResultDiff(expected, unexpected) {
-  var s = "";
-  s += "<table border='0' cellspacing='0' cellpadding='4'>";
-  s += "<tr><td></td><td colspan='3'>Expected:</td></tr>";
-  var k = 0;
-  for (var i = 0; i < expected.length; i++) {
-    for (var j = k; j < unexpected.length; j++) {
-      if (Result.Equals(expected[i], unexpected[j])) {
-        var tmp = unexpected[k];
-        unexpected[k] = unexpected[j];
-        unexpected[j] = tmp;
-        k++;
-        break;
-      }
-    }
-    if (j == unexpected.length) {
-      s += LogParser.GenerateResultRow(expected[i]);
-    }
-  }
-  if (k < unexpected.length) {
-    s += "<tr><td></td><td colspan='3'>Unexpected:</td></tr>";
-    for (; k < unexpected.length; k++) {
-      s += LogParser.GenerateResultRow(unexpected[k]);
-    }
-  }
-  s += "</table>";
-  return s;
-}
-
-
 var file = TW.readFile("logParser.js");
 if (file.status == 0) {
   eval(file.result);
@@ -114,6 +84,35 @@ if (file.status == 0) {
       }
     }
     return testResults;
+  }
+
+  function GenerateResultDiff(expected, unexpected) {
+    var s = "";
+    s += "<table border='0' cellspacing='0' cellpadding='4'>";
+    s += "<tr><td></td><td colspan='3'>Expected:</td></tr>";
+    var k = 0;
+    for (var i = 0; i < expected.length; i++) {
+      for (var j = k; j < unexpected.length; j++) {
+        if (Result.Equals(expected[i], unexpected[j])) {
+          var tmp = unexpected[k];
+          unexpected[k] = unexpected[j];
+          unexpected[j] = tmp;
+          k++;
+          break;
+        }
+      }
+      if (j == unexpected.length) {
+        s += parser.GenerateResultRow(expected[i]);
+      }
+    }
+    if (k < unexpected.length) {
+      s += "<tr><td></td><td colspan='3'>Unexpected:</td></tr>";
+      for (; k < unexpected.length; k++) {
+        s += parser.GenerateResultRow(unexpected[k]);
+      }
+    }
+    s += "</table>";
+    return s;
   }
 
 
