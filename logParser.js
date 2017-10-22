@@ -189,7 +189,8 @@ function LogParser() {
 
   this.Settings = {
     SortBy: SortBy.Severity,
-    MinSeverity: Severity.BadBox
+    MinSeverity: Severity.BadBox,
+    WarnAuxFiles: true
   };
 
 
@@ -261,7 +262,7 @@ function LogParser() {
       }
     }
 
-    this.WarnAuxFiles();
+    typeof (onParseCompleted) === "function" && onParseCompleted(rootFileName, this.Results);
   }
 
 
@@ -409,20 +410,6 @@ function LogParser() {
   })();
 
 
-  this.WarnAuxFiles = function () {
-    for (var i = this.Results.length - 1; i >= 0; i--) {
-      if (this.Results[i].Description.indexOf("File ended while scanning use of") > -1) {
-        if (TW.question(null, "", "While typesetting, a corrupt .aux " +
-          "file from a previous run was detected. You should remove " +
-          "it and rerun the typesetting process. Do you want to display " +
-          "the \"Remove Aux Files...\" dialog now?", 0x14000) == 0x4000)
-          TW.target.removeAuxFiles();
-        break;
-      }
-    }
-  }
-
-
   this.GenerateReport = function (onlyTable) {
     if (this.Results.length > 0) {
       var counters = [0, 0, 0, 0];
@@ -484,7 +471,7 @@ function LogParser() {
   })();
 
 
-  var onResultAdded, onFileOpened, onFileClosed;
+  var onResultAdded, onFileOpened, onFileClosed, onParseCompleted;
 
   this.setResultAddedCallback = function (callback) {
     onResultAdded = callback;
@@ -496,6 +483,10 @@ function LogParser() {
 
   this.setFileClosedCallback = function (callback) {
     onFileClosed = callback;
+  };
+
+  this.setParseCompletedCallback = function (callback) {
+    onParseCompleted = callback;
   };
 
 
@@ -515,6 +506,22 @@ function LogParser() {
 // We allow other scripts to use and reconfigure this parser
 if (typeof (justLoad) == "undefined") {
   var parser = new LogParser();
+
+  if (parser.Settings.WarnAuxFiles) {
+    parser.setParseCompletedCallback(function (rootFileName, results) {
+      for (var i = results.length - 1; i >= 0; i--) {
+        if (results[i].Description.indexOf("File ended while scanning use of") > -1) {
+          if (TW.question(null, "", "While typesetting, a corrupt .aux " +
+            "file from a previous run was detected. You should remove " +
+            "it and rerun the typesetting process. Do you want to display " +
+            "the \"Remove Aux Files...\" dialog now?", 0x14000) == 0x4000)
+            TW.target.removeAuxFiles();
+          break;
+        }
+      }
+    })
+  }
+
   parser.Parse(TW.target.consoleOutput, TW.target.rootFileName);
   TW.result = parser.GenerateReport();
 }
