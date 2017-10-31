@@ -42,7 +42,6 @@ String.prototype.format = function () {
 };
 
 
-
 // Tracer
 function Tracer(logParser) {
   var dirty = true;
@@ -130,7 +129,6 @@ function ShowOutputDialog(markup) {
 }
 
 
-
 function escapeHtml(str) {
   var html = str;
   html = html.replace(/&/g, "&amp;");
@@ -152,10 +150,40 @@ if (file.status == 0) {
   var parser = new LogParser();
   var tracer = new Tracer(parser);
 
+  var timeInParse = 0;
+  var timeInMatchNewFile = 0;
+
+  parser.MatchNewFile = (function (old) {
+    return function () {
+      var start = Date.now();
+      var result = old.apply(this, arguments);
+      timeInMatchNewFile += Date.now() - start;
+      return result;
+    }
+  })(parser.MatchNewFile);
+
+  parser.Parse = (function (old) {
+    return function () {
+      var start = Date.now();
+      var result = old.apply(this, arguments);
+      timeInParse += Date.now() - start;
+      return result;
+    }
+  })(parser.Parse);
+
   var input = TW.target.text;
   if ((input && /^This is .{1,10}TeX/.test(input)) || TW.question(null, "", NOTHING_TO_PARSE, 0x14000) == 0x4000) {
     parser.Parse(input, TW.target.rootFileName);
-    ShowOutputDialog(parser.GenerateReport() + "\n<hr>\n" + "Trace follows:<br><br><tt>" + escapeHtml(tracer.GetTrace()) + "</tt>");
+    ShowOutputDialog(parser.GenerateReport() +
+      "\n<hr>\n" +
+      "Timings:" +
+      "<table>" +
+      "<tr><td>&nbsp;</td><td>Result parsing:</td><td>&nbsp;</td><td>" + (timeInParse - timeInMatchNewFile) / 1000 + "&thinsp;ms</td></tr>" +
+      "<tr><td>&nbsp;</td><td>File mathing:</td><td>&nbsp;</td><td>" + timeInMatchNewFile / 1000 + "&thinsp;ms</td></tr>" +
+      "<tr><td>&nbsp;</td><td>Total:</td><td>&nbsp;</td><td>" + timeInParse / 1000 + "&thinsp;ms</td></tr>" +
+      "</table>" +
+      "\n<hr>\n" +
+      "Trace follows:<br><br><tt>" + escapeHtml(tracer.GetTrace()) + "</tt>");
   }
 }
 else {
