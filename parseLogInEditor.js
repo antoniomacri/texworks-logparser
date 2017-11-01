@@ -174,8 +174,9 @@ if (file.status == 0) {
   var input = TW.target.text;
   if ((input && /^This is .{1,10}TeX/.test(input)) || TW.question(null, "", NOTHING_TO_PARSE, 0x14000) == 0x4000) {
     parser.Parse(input, TW.target.rootFileName);
-    ShowOutputDialog(parser.GenerateReport() +
-      "\n<hr>\n" +
+    var resultHtml = parser.GenerateReport();
+    ShowOutputDialog((resultHtml ? resultHtml : "No results.") +
+      "<hr>\n" +
       "Timings:" +
       "<table>" +
       "<tr><td>&nbsp;</td><td>Result parsing:</td><td>&nbsp;</td><td>" + (timeInParse - timeInMatchNewFile) / 1000 + "&thinsp;ms</td></tr>" +
