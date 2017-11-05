@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Log Parser page</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-throttle-debounce/1.1/jquery.ba-throttle-debounce.min.js" integrity="sha256-+nuEu243+6BveXk5N+Vbr268G+4FHjUOEcfKaBqfPbc="
+        crossorigin="anonymous"></script>
+
+
+    <script>
+        justLoad = null;
+
+        // Mock TeXworks functions
+        TW = {};
+        TW.fileExists = function () { return 2; };
+
+        // Utility functions
+        String.prototype.format = function () {
+            var fmt = this;
+            for (var i = 0; i < arguments.length; i++) {
+                fmt = fmt.replace(new RegExp("%" + i, "g"), arguments[i]);
+            }
+            return fmt;
+        };
+
+        // Tracer
+        function Tracer(logParser) {
+            var dirty = true;
+            var indent = 0;
+            var oldFile;
+            var traceResults = "";
+
+            function padString(length) {
+                var str = "";
+                while (str.length < length)
+                    str += " ";
+                return str;
+            }
+
+            logParser.setFileOpenedCallback(function (file) {
+                if (!dirty) {
+                    traceResults += padString(indent++ * 2) + "<file path='" + oldFile + "'>\n";
+                }
+                oldFile = file;
+                dirty = false;
+            });
+
+            logParser.setResultAddedCallback(function (m) {
+                if (!dirty) {
+                    traceResults += padString(indent++ * 2) + "<file path='" + oldFile + "'>\n";
+                }
+                traceResults += padString(indent * 2) + "<result severity='" + m.Severity + "' file='" + m.File + "' row='" + m.Row + "'>\n";
+                traceResults += padString(indent * 2 + 2) + m.Description + "\n";
+                traceResults += padString(indent * 2) + "</result>\n";
+                dirty = true;
+            });
+
+            logParser.setFileClosedCallback(function (file) {
+                if (!dirty)
+                    traceResults += padString(indent * 2) + "<file path='" + oldFile + "' />\n";
+                else
+                    traceResults += padString(--indent * 2) + "</file> <!-- '" + file + "' -->\n";
+                dirty = true;
+            });
+
+            this.GetTrace = function () {
+                return traceResults;
+            };
+        }
+    </script>
+    <script src="logParser.js"></script>
+
+    <script>
+        function runParser() {
+            var parser = new LogParser();
+            var tracer = new Tracer(parser);
+
+            var timeInParse = 0;
+            var timeInMatchNewFile = 0;
+
+            parser.MatchNewFile = (function (old) {
+                return function () {
+                    var start = Date.now();
+                    var result = old.apply(this, arguments);
+                    timeInMatchNewFile += Date.now() - start;
+                    return result;
+                }
+            })(parser.MatchNewFile);
+
+            parser.Parse = (function (old) {
+                return function () {
+                    var start = Date.now();
+                    var result = old.apply(this, arguments);
+                    timeInParse += Date.now() - start;
+                    return result;
+                }
+            })(parser.Parse);
+
+
+            var rootFileName = "example";
+            var input = $("textarea").val();
+
+            if (input && /^This is .{1,10}TeX/.test(input)) {
+                parser.Parse(input, rootFileName);
+
+                if (parser.Results && parser.Results.length) {
+                    var resultHtml = parser.GenerateReport();
+                    $("#hr-results").html(resultHtml);
+                    $("#results-json").empty().append($("<pre>").text(JSON.stringify(parser.Results, null, 2)));
+                } else {
+                    $("#hr-results").html("No result.");
+                    $("#results-json").html("No result.");
+                }
+
+                $("#timings").html("<table>" +
+                    "<tr><td>&nbsp;</td><td>Result parsing:</td><td>&nbsp;</td><td>" + (timeInParse - timeInMatchNewFile) / 1000 + "&thinsp;ms</td></tr>" +
+                    "<tr><td>&nbsp;</td><td>File mathing:</td><td>&nbsp;</td><td>" + timeInMatchNewFile / 1000 + "&thinsp;ms</td></tr>" +
+                    "<tr><td>&nbsp;</td><td>Total:</td><td>&nbsp;</td><td>" + timeInParse / 1000 + "&thinsp;ms</td></tr>" +
+                    "</table>");
+
+                $("#trace").empty().append($("<pre>").text(tracer.GetTrace()));
+
+                $("#container-startup").hide();
+                $("#container-results").show();
+
+                sessionStorage.setItem("log", input);
+            }
+            else {
+                $("#startup").html("The text entered does not seem a valid log.");
+                $("#container-startup").show();
+                $("#container-results").hide();
+            }
+        }
+
+        $(function () {
+            $("textarea").on('change keyup paste', $.debounce(250, runParser));
+
+            var savedLog = sessionStorage.getItem("log");
+            if (savedLog) {
+                $("textarea").val(savedLog);
+                runParser();
+            }
+        });
+    </script>
+
+</head>
+
+<body>
+    <style>
+        html,
+        body {
+            height: 100%;
+            font-family: Sans-Serif;
+            font-size: 12px;
+        }
+
+        body {
+            background: #1a5192;
+            display: -webkit-box;
+            display: -ms-flexbox;
+            display: flex;
+            -webkit-box-align: center;
+            -ms-flex-align: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        #startup {
+            color: gray;
+        }
+
+        h1 {
+            margin-top: 25px;
+            margin-bottom: 10px;
+        }
+
+        h1.first {
+            margin-top: 0;
+
+        }
+
+        .sidebar {
+            position: absolute;
+            font-family: Monospace;
+            width: 90ch;
+            height: 100%;
+        }
+
+        .page-wrap {
+            position: relative;
+            width: 98%;
+            height: 94%;
+            margin: 0;
+        }
+
+        textarea {
+            display: block;
+            font-size: 12px;
+            box-sizing: border-box;
+            height: 100%;
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+            border: 0;
+        }
+
+        .content {
+            box-sizing: border-box;
+            height: 100%;
+            padding: 10px;
+            margin-left: 94ch;
+            background: white;
+            border-radius: 6px;
+            overflow-y: scroll;
+        }
+    </style>
+
+    <div class="page-wrap">
+        <div class="sidebar">
+            <textarea rows='3' data-min-rows='3' placeholder='Put the log/output here...'></textarea>
+        </div>
+        <div class="content">
+            <div id="container-startup">
+                <p id="startup">...results will show up here.</p>
+            </div>
+            <div id="container-results" style="display:none">
+                <div>
+                    <h1 class="first">Errors, warnings, badboxes</h1>
+                    <div id="hr-results"></div>
+                </div>
+                <div>
+                    <h1>Results JSON</h1>
+                    <div id="results-json"></div>
+                </div>
+                <div>
+                    <h1>Timings</h1>
+                    <div id="timings"></div>
+                </div>
+                <div>
+                    <h1>Trace</h1>
+                    <div id="trace"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>
