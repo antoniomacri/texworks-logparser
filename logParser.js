@@ -133,6 +133,16 @@ function LogParser() {
       }
     },
     {
+      // Matches "pdfTeX warning"s, for instance "destination with the same identifier (...) has been already used, duplicate ignored".
+      // These warnings can start in the middle of a line, so a special flag is needed to enable matching.
+      Regex: new RegExp("^p\n?d\n?f\n?T\n?e\n?X\n? \n?w\n?a\n?r\n?n\n?i\n?n\n?g\n?.+?\n((?:.{" + max_print_line + "}\n)*)(.*)"),
+      AllowedWithinLine: true,
+      Callback: function (m, f) {
+        m[0] = m[0].replace(/\n/g, "").replace(/\s+/g, " ").trim();
+        return new Result(Severity.Warning, f, 0, m[0]);
+      }
+    },
+    {
       // This pattern recognizes badboxes in paragraphs with context given on one, two or more lines.
       Regex: new RegExp("^((?:Under|Over)full \\\\hbox\\s*\\([^)]+\\) in paragraph at lines (\\d+)--\\d+\n)((?:.{" + max_print_line + "}\n)*)(.*)"),
       Callback: function (m, f) {
@@ -203,11 +213,13 @@ function LogParser() {
 
 
   this.Parse = function (output, rootFileName) {
-    var skipRegexp = new RegExp("^[^\n\r()]+");
+    var skipRegexp = new RegExp("^[^\n\r()](?:(?!\\b)[^\n\r()])*");
     var currentFile = undefined, fileStack = [], extraParens = 0;
 
     // Generate or clear old results
     this.Results = [];
+
+    var midLine = null;
 
     while (output.length > 0) {
       // Be sure to remove any whitespace at the beginning of the string
@@ -218,6 +230,10 @@ function LogParser() {
       // gobble such text and avoid those parenthesis conflict with the
       // file stack.
       for (var i = 0, len = this.Patterns.length; i < len;) {
+        if (midLine && !this.Patterns[i].AllowedWithinLine) {
+          i++;
+          continue;
+        }
         var match = this.Patterns[i].Regex.exec(output);
         if (match) {
           var result = this.Patterns[i].Callback(match, currentFile);
@@ -237,6 +253,7 @@ function LogParser() {
       }
 
       // Go to the first parenthesis or simply skip the first line
+      var midLine = null;
       var match = skipRegexp.exec(output);
       if (match) {
         output = output.slice(match[0].length);
@@ -261,12 +278,16 @@ function LogParser() {
             output = result.Output;
             lookahead = result.Lookahead;
             extraParens = 0;
+            midLine = false;
           }
           else {
             extraParens++;
             output = output.slice(1);
           }
         } while (lookahead);
+      }
+      if (midLine === null) {
+        midLine = (output.charAt(0) != "\n" && output.charAt(0) != "\r");
       }
     }
 

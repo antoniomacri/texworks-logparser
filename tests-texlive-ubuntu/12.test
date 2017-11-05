@@ -104,6 +104,10 @@
     "Description":"345.0pt.\n<recently read> \\textwidth \n                           \nl.53 \\printb{textwidth}"
   },
   {
+    "Severity":Severity.Warning,"File":"./prova.tex","Row":0,
+    "Description":"pdfTeX warning: /usr/local/texlive/2011/bin/i386-linux/pdflatex (file ./securerandomgen.pdf): PDF inclusion: found PDF version <1.6>, but at most version <1.5> allowed"
+  },
+  {
     "Severity":Severity.Error,"File":"./prova.tex","Row":"60",
     "Description":"Undefined control sequence.\nl.60 \\lipsu"
   },

@@ -1,0 +1,73 @@
+[
+  {
+    "Severity": 1,
+    "File": "./texworks-issue-730-extended.tex",
+    "Row": 0,
+    "Description": "pdfTeX warning (ext4): destination with the same identifier (name{page.1}) has been already used, duplicate ignored"
+  },
+  {
+    "Severity": 1,
+    "File": "./texworks-issue-730-extended.tex",
+    "Row": 0,
+    "Description": "pdfTeX warning (ext4): destination with the same identifier (name{page.1}) has been already used, duplicate ignored"
+  },
+  {
+    "Severity": 1,
+    "File": "./texworks-issue-730-extended.tex",
+    "Row": 0,
+    "Description": "pdfTeX warning (ext4): destination with the same identifier (name{page.1}) has been already used, duplicate ignored"
+  }
+]
+-----BEGIN OUTPUT BLOCK-----
+This is pdfTeX, Version 3.14159265-2.6-1.40.18 (TeX Live 2017/W32TeX) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+(./texworks-issue-730-extended.tex
+LaTeX2e <2017-04-15>
+Babel <3.13> and hyphenation patterns for 10 language(s) loaded.
+(c:/texlive/2017/texmf-dist/tex/latex/base/report.cls
+Document Class: report 2014/09/29 v1.4h Standard LaTeX document class
+(c:/texlive/2017/texmf-dist/tex/latex/base/size12.clo))
+(c:/texlive/2017/texmf-dist/tex/latex/hyperref/hyperref.sty
+(c:/texlive/2017/texmf-dist/tex/generic/oberdiek/hobsub-hyperref.sty
+(c:/texlive/2017/texmf-dist/tex/generic/oberdiek/hobsub-generic.sty))
+(c:/texlive/2017/texmf-dist/tex/latex/graphics/keyval.sty)
+(c:/texlive/2017/texmf-dist/tex/generic/ifxetex/ifxetex.sty)
+(c:/texlive/2017/texmf-dist/tex/latex/oberdiek/auxhook.sty)
+(c:/texlive/2017/texmf-dist/tex/latex/oberdiek/kvoptions.sty)
+(c:/texlive/2017/texmf-dist/tex/latex/hyperref/pd1enc.def)
+(c:/texlive/2017/texmf-dist/tex/latex/latexconfig/hyperref.cfg)
+(c:/texlive/2017/texmf-dist/tex/latex/url/url.sty))
+
+Package hyperref Message: Driver (autodetected): hpdftex.
+
+(c:/texlive/2017/texmf-dist/tex/latex/hyperref/hpdftex.def
+(c:/texlive/2017/texmf-dist/tex/latex/oberdiek/rerunfilecheck.sty))
+(c:/texlive/2017/texmf-dist/tex/latex/lipsum/lipsum.sty)
+(./texworks-issue-730-extended.aux)
+(c:/texlive/2017/texmf-dist/tex/latex/hyperref/nameref.sty
+(c:/texlive/2017/texmf-dist/tex/generic/oberdiek/gettitlestring.sty))
+(./texworks-issue-730-extended.out) (./texworks-issue-730-extended.out)
+ccccccc [1{c:/texlive/2017/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]pdfTeX
+ warning (ext4): destination with the same identifier (name{page.1}) has been a
+lready used, duplicate ignored
+<to be read again> 
+                   \relax 
+l.11 \end{abstract}
+                    [1]pdfTeX warning (ext4): destination with the same identif
+ier (name{page.1}) has been already used, duplicate ignored
+<to be read again> 
+                   \relax 
+l.14 \begin{abstract}
+                      [1]pdfTeX warning (ext4): destination with the same ident
+ifier (name{page.1}) has been already used, duplicate ignored
+<to be read again> 
+                   \relax 
+l.16 \end{abstract}
+                    [1] (./texworks-issue-730-extended.aux) )
+(see the transcript file for additional information)<c:/texlive/2017/texmf-dist
+/fonts/type1/public/amsfonts/cm/cmbx12.pfb><c:/texlive/2017/texmf-dist/fonts/ty
+pe1/public/amsfonts/cm/cmr12.pfb>
+Output written on texworks-issue-730-extended.pdf (4 pages, 24404 bytes).
+SyncTeX written on texworks-issue-730-extended.synctex.gz.
+Transcript written on texworks-issue-730-extended.log.
